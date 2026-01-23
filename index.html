@@ -16,23 +16,18 @@
         .font-serif { font-family: 'Playfair Display', serif; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body class="bg-stone-100">
     <div id="root"></div>
 
-    <!-- Nạp Firebase dưới dạng module để tránh lỗi định nghĩa -->
-    <script type="module">
+    <!-- Sử dụng một thẻ script type="text/babel" duy nhất với data-type="module" để nạp Firebase ổn định -->
+    <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-        // Gán vào window để Babel có thể truy cập được từ script type="text/babel"
-        window.FirebaseSDK = { initializeApp, getFirestore, doc, setDoc, onSnapshot, collection, query, getAuth, signInAnonymously, onAuthStateChanged };
-    </script>
-
-    <script type="text/babel">
-        const { initializeApp, getFirestore, doc, setDoc, onSnapshot, collection, query, getAuth, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
 
         // --- CẤU HÌNH FIREBASE ---
         const firebaseConfig = {
@@ -44,9 +39,9 @@
             appId: "1:1083656610996:web:67780223432a21866323e1"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        const firebaseApp = initializeApp(firebaseConfig);
+        const auth = getAuth(firebaseApp);
+        const db = getFirestore(firebaseApp);
         const appId = "sixty-day-challenge-v1";
 
         const { useState, useEffect } = React;
