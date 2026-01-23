@@ -10,20 +10,31 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
         body { font-family: 'Quicksand', sans-serif; }
         .font-serif { font-family: 'Playfair Display', serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-stone-100">
     <div id="root"></div>
 
+    <!-- Nạp Firebase dưới dạng module để tránh lỗi định nghĩa -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // Gán vào window để Babel có thể truy cập được từ script type="text/babel"
+        window.FirebaseSDK = { initializeApp, getFirestore, doc, setDoc, onSnapshot, collection, query, getAuth, signInAnonymously, onAuthStateChanged };
+    </script>
+
     <script type="text/babel">
+        const { initializeApp, getFirestore, doc, setDoc, onSnapshot, collection, query, getAuth, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
+
         // --- CẤU HÌNH FIREBASE ---
-        // Sử dụng cấu hình bạn đã cung cấp
         const firebaseConfig = {
             apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
             authDomain: "day-challenge-39df2.firebaseapp.com",
@@ -32,11 +43,6 @@
             messagingSenderId: "1083656610996",
             appId: "1:1083656610996:web:67780223432a21866323e1"
         };
-
-        // Import Firebase từ CDN
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -68,74 +74,98 @@
 
             useEffect(() => {
                 const initAuth = async () => {
-                    try { await signInAnonymously(auth); } catch (e) { console.error(e); }
+                    try { 
+                        await signInAnonymously(auth); 
+                    } catch (e) { 
+                        console.error("Lỗi xác thực Firebase:", e); 
+                    }
                 };
                 initAuth();
-                onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
+                const unsubscribe = onAuthStateChanged(auth, (u) => { 
+                    setUser(u); 
+                    setLoading(false); 
+                });
+                return () => unsubscribe();
             }, []);
 
             useEffect(() => {
-                const now = new Date();
-                const diffTime = now.getTime() - START_DATE.getTime();
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                const current = Math.max(1, Math.min(diffDays, TOTAL_DAYS));
-                setTodayNum(current);
-                setViewDay(current);
+                const calculateDay = () => {
+                    const now = new Date();
+                    const diffTime = now.getTime() - START_DATE.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    const current = Math.max(1, Math.min(diffDays, TOTAL_DAYS));
+                    setTodayNum(current);
+                    setViewDay(current);
+                };
+                calculateDay();
             }, []);
 
             useEffect(() => {
                 if (!user) return;
                 const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'challenges'));
-                return onSnapshot(q, (snap) => {
+                const unsubscribe = onSnapshot(q, (snap) => {
                     const newData = {};
                     snap.forEach(doc => { newData[doc.id] = doc.data().days || {}; });
                     setData(newData);
+                }, (err) => {
+                    console.error("Lỗi lắng nghe dữ liệu:", err);
                 });
+                return () => unsubscribe();
             }, [user]);
 
             const toggleTask = async (memberIdx, day, taskId) => {
+                if (!user) return;
                 const memberData = data[memberIdx] || {};
                 const dayData = memberData[day] || {};
                 const updated = { ...memberData, [day]: { ...dayData, [taskId]: !dayData[taskId] } };
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'challenges', memberIdx.toString()), { days: updated }, { merge: true });
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'challenges', memberIdx.toString()), { days: updated }, { merge: true });
+                } catch (e) {
+                    console.error("Lỗi lưu dữ liệu:", e);
+                }
             };
 
-            if (loading) return <div className="flex h-screen items-center justify-center italic text-stone-500">Đang khởi tạo...</div>;
+            if (loading) return (
+                <div className="flex flex-col h-screen items-center justify-center bg-stone-100">
+                    <div className="w-12 h-12 border-4 border-red-800 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="italic text-stone-500 font-serif">Đang kết nối Mandala...</p>
+                </div>
+            );
 
             return (
-                <div className="min-h-screen pb-10">
-                    <header className="bg-red-900 text-amber-100 py-10 px-4 text-center border-b-4 border-amber-500 shadow-2xl">
+                <div className="min-h-screen pb-10 bg-stone-100">
+                    <header className="bg-red-900 text-amber-100 py-10 px-4 text-center border-b-4 border-amber-500 shadow-2xl relative">
                         <h1 className="text-3xl font-bold font-serif uppercase tracking-widest">Xóa "Điếc"</h1>
-                        <p className="mt-2 opacity-80 italic">Hành trình 60 ngày tịnh hóa</p>
+                        <p className="mt-2 opacity-80 italic">Hành trình 60 ngày tịnh hóa tâm thức</p>
                     </header>
 
                     <div className="max-w-4xl mx-auto px-4 mt-8">
                         <div className="flex bg-white rounded-t-xl border border-stone-200 overflow-hidden shadow-sm">
-                            <button onClick={() => setViewMode('group')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest ${viewMode === 'group' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400'}`}>Nhóm</button>
-                            <button onClick={() => setViewMode('personal')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest ${viewMode === 'personal' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400'}`}>Cá nhân</button>
+                            <button onClick={() => setViewMode('group')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest transition-all ${viewMode === 'group' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400 hover:bg-stone-50'}`}>Nhóm</button>
+                            <button onClick={() => setViewMode('personal')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest transition-all ${viewMode === 'personal' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400 hover:bg-stone-50'}`}>Cá nhân</button>
                         </div>
 
                         {viewMode === 'group' ? (
                             <div className="bg-white p-6 rounded-b-xl border-x border-b border-stone-200 shadow-md">
                                 <div className="flex justify-between items-center mb-6 border-b pb-4">
-                                    <h2 className="font-bold text-red-900">Bảng Vàng Ngày {viewDay}</h2>
+                                    <h2 className="font-bold text-red-900 font-serif">Bảng Vàng Ngày {viewDay}</h2>
                                     <div className="flex items-center gap-3 bg-stone-100 px-3 py-1 rounded-full border">
-                                        <button onClick={() => setViewDay(Math.max(1, viewDay - 1))}>←</button>
-                                        <span className="font-bold text-sm">Ngày {viewDay}</span>
-                                        <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} disabled={viewDay >= todayNum} className="disabled:opacity-20">→</button>
+                                        <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="hover:text-red-800">←</button>
+                                        <span className="font-bold text-sm min-w-[70px] text-center">Ngày {viewDay}</span>
+                                        <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} disabled={viewDay >= todayNum} className="disabled:opacity-20 hover:text-red-800">→</button>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {MEMBERS.map((name, i) => {
                                         const done = data[i]?.[viewDay] ? Object.values(data[i][viewDay]).filter(v => v).length : 0;
                                         return (
-                                            <div key={i} className="p-4 rounded-lg border border-stone-100 bg-stone-50 shadow-sm">
+                                            <div key={i} className={`p-4 rounded-lg border transition-all ${done === 6 ? 'border-amber-400 bg-amber-50 shadow-inner' : 'border-stone-100 bg-stone-50'}`}>
                                                 <div className="flex justify-between font-bold text-sm mb-2">
                                                     <span>{name}</span>
                                                     <span className={done === 6 ? 'text-amber-600' : 'text-stone-400'}>{done}/6</span>
                                                 </div>
                                                 <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                                                    <div className="bg-red-800 h-full transition-all duration-500" style={{width: `${(done/6)*100}%`}}></div>
+                                                    <div className="bg-red-800 h-full transition-all duration-700" style={{width: `${(done/6)*100}%`}}></div>
                                                 </div>
                                             </div>
                                         );
@@ -144,38 +174,56 @@
                             </div>
                         ) : (
                             <div className="bg-white p-6 rounded-b-xl border-x border-b border-stone-200 shadow-md">
-                                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 scrollbar-hide">
+                                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 scrollbar-hide border-b border-stone-100">
                                     {MEMBERS.map((name, i) => (
-                                        <button key={i} onClick={() => setSelectedMember(i)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${selectedMember === i ? 'bg-red-900 text-white border-red-900' : 'bg-stone-50 text-stone-500'}`}>
+                                        <button key={i} onClick={() => setSelectedMember(i)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${selectedMember === i ? 'bg-red-900 text-white border-red-900 shadow-md scale-105' : 'bg-stone-50 text-stone-500 hover:border-amber-300'}`}>
                                             {name}
                                         </button>
                                     ))}
                                 </div>
                                 {selectedMember !== null ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="grid grid-cols-10 gap-1 bg-stone-50 p-3 rounded-lg border">
-                                            {[...Array(60)].map((_, i) => (
-                                                <div key={i} className={`aspect-square text-[8px] flex items-center justify-center rounded border ${i+1 > todayNum ? 'opacity-10' : (i+1 === viewDay ? 'border-red-600 bg-red-50' : 'bg-white text-stone-300')}`}>
-                                                    {i+1}
-                                                </div>
-                                            ))}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fadeIn">
+                                        <div className="grid grid-cols-10 gap-1 bg-stone-50 p-3 rounded-lg border h-fit">
+                                            {[...Array(60)].map((_, i) => {
+                                                const dayNum = i + 1;
+                                                const isDone = data[selectedMember]?.[dayNum] && Object.values(data[selectedMember][dayNum]).filter(v => v).length === 6;
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        onClick={() => dayNum <= todayNum && setViewDay(dayNum)}
+                                                        className={`aspect-square text-[8px] flex items-center justify-center rounded border cursor-pointer transition-all ${dayNum > todayNum ? 'opacity-10 cursor-not-allowed' : (dayNum === viewDay ? 'border-red-600 bg-red-100 font-bold' : (isDone ? 'bg-amber-400 border-amber-600 text-white' : 'bg-white text-stone-400 hover:border-red-300'))}`}
+                                                    >
+                                                        {dayNum}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                         <div className="bg-stone-800 text-stone-100 p-5 rounded-xl shadow-lg border-t-4 border-amber-500">
-                                            <h3 className="font-bold text-amber-400 border-b border-stone-700 pb-2 mb-4">Ngày {viewDay}</h3>
+                                            <h3 className="font-bold text-amber-400 border-b border-stone-700 pb-2 mb-4 font-serif flex justify-between items-center">
+                                                Ngày {viewDay}
+                                                {viewDay === todayNum && <span className="text-[10px] bg-red-700 text-white px-2 py-0.5 rounded">Hôm nay</span>}
+                                            </h3>
                                             <div className="space-y-2">
                                                 {DAILY_TASKS.map(t => (
-                                                    <button key={t.id} onClick={() => toggleTask(selectedMember, viewDay, t.id)} className={`w-full text-left p-3 rounded text-[11px] flex items-center gap-3 transition-all ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-600/20 text-amber-200 border border-amber-600/40' : 'bg-stone-700/50 text-stone-400 border border-transparent'}`}>
-                                                        <div className={`w-3 h-3 rounded-full border ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-500 border-amber-500' : 'border-stone-500'}`}></div>
+                                                    <button key={t.id} onClick={() => toggleTask(selectedMember, viewDay, t.id)} className={`w-full text-left p-3 rounded text-[11px] flex items-center gap-3 transition-all ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-600/20 text-amber-200 border border-amber-600/40' : 'bg-stone-700/50 text-stone-400 border border-transparent hover:bg-stone-700/80'}`}>
+                                                        <div className={`w-3 h-3 rounded-full border transition-all ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-500 border-amber-500' : 'border-stone-500'}`}></div>
                                                         {t.label}
                                                     </button>
                                                 ))}
                                             </div>
                                         </div>
                                     </div>
-                                ) : <div className="text-center py-10 text-stone-300 italic">Chọn một Pháp hữu để tiếp tục</div>}
+                                ) : (
+                                    <div className="text-center py-20 text-stone-300 italic font-serif">
+                                        Chọn một Pháp hữu để theo dõi tiến trình
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
+                    <footer className="mt-10 text-center text-stone-400 text-[10px] italic">
+                        Om Mani Padme Hum
+                    </footer>
                 </div>
             );
         };
