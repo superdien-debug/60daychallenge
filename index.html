@@ -1,256 +1,187 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  collection, 
-  query 
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Sun, 
-  Moon, 
-  Sunrise, 
-  Flame, 
-  User, 
-  Calendar,
-  Users,
-  ChevronLeft,
-  ChevronRight,
-  Trophy,
-  Loader2
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thử Thách 60 Ngày Xóa Điếc</title>
+    <!-- Tailwind CSS cho giao diện -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel để chạy JSX ngay trong trình duyệt -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        body { font-family: 'Quicksand', sans-serif; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-stone-100">
+    <div id="root"></div>
 
-// --- CẤU HÌNH FIREBASE CỦA BẠN ---
-// Thay thế đoạn config bên dưới bằng thông tin từ Firebase Console của bạn
-const firebaseConfig = {
-  apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
-  authDomain: "day-challenge-39df2.firebaseapp.com",
-  projectId: "day-challenge-39df2",
-  storageBucket: "day-challenge-39df2.firebasestorage.app",
-  messagingSenderId: "1083656610996",
-  appId: "1:1083656610996:web:67780223432a21866323e1",
-  measurementId: "G-15NNZF555N"
-};
+    <script type="text/babel">
+        // --- CẤU HÌNH FIREBASE ---
+        // Sử dụng cấu hình bạn đã cung cấp
+        const firebaseConfig = {
+            apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
+            authDomain: "day-challenge-39df2.firebaseapp.com",
+            projectId: "day-challenge-39df2",
+            storageBucket: "day-challenge-39df2.firebasestorage.app",
+            messagingSenderId: "1083656610996",
+            appId: "1:1083656610996:web:67780223432a21866323e1"
+        };
 
-// Khởi tạo Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = "sixty-day-challenge-v1"; // ID định danh ứng dụng của bạn
+        // Import Firebase từ CDN
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-const App = () => {
-  const TOTAL_DAYS = 60;
-  const START_DATE = new Date('2026-01-23'); 
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = "sixty-day-challenge-v1";
 
-  const MEMBERS = [
-    "Bảo Bình", "Bình Minh", "Phượng", "Phương", 
-    "Trang", "Điện", "Ánh Dương", "Thanh Thảo", 
-    "Linh", "Quân", "Hằng"
-  ];
+        const { useState, useEffect } = React;
 
-  const DAILY_TASKS = [
-    { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện', session: 'morning_wake' },
-    { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy', session: 'morning_practice' },
-    { id: 'khau_hanh', label: '4 Giới & 4 Thiện hạnh về Khẩu', session: 'daytime' },
-    { id: 'am_thanh', label: 'Giải phóng cơ thể & Âm thanh', session: 'daytime' },
-    { id: 'tri_chu', label: 'Nghi quỹ 3Kaya & Cúng Hộ Pháp', session: 'evening' },
-    { id: 'thien_quan', label: 'Thiền 10p & Quán Đức Phổ Hiền', session: 'evening' }
-  ];
+        const App = () => {
+            const TOTAL_DAYS = 60;
+            const START_DATE = new Date('2026-01-23'); 
+            const MEMBERS = ["Bảo Bình", "Bình Minh", "Phượng", "Phương", "Trang", "Điện", "Ánh Dương", "Thanh Thảo", "Linh", "Quân", "Hằng"];
+            const DAILY_TASKS = [
+                { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện' },
+                { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy' },
+                { id: 'khau_hanh', label: '4 Giới & 4 Thiện hạnh về Khẩu' },
+                { id: 'am_thanh', label: 'Giải phóng cơ thể & Âm thanh' },
+                { id: 'tri_chu', label: 'Nghi quỹ 3Kaya & Cúng Hộ Pháp' },
+                { id: 'thien_quan', label: 'Thiền 10p & Quán Đức Phổ Hiền' }
+            ];
 
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [viewDay, setViewDay] = useState(1);
-  const [todayNum, setTodayNum] = useState(1);
-  const [data, setData] = useState({}); 
-  const [viewMode, setViewMode] = useState('group');
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [selectedMember, setSelectedMember] = useState(null);
+            const [viewDay, setViewDay] = useState(1);
+            const [todayNum, setTodayNum] = useState(1);
+            const [data, setData] = useState({});
+            const [viewMode, setViewMode] = useState('group');
 
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+            useEffect(() => {
+                const initAuth = async () => {
+                    try { await signInAnonymously(auth); } catch (e) { console.error(e); }
+                };
+                initAuth();
+                onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
+            }, []);
 
-  useEffect(() => {
-    const calculateCurrentDay = () => {
-      const now = new Date();
-      const start = new Date(START_DATE);
-      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const diffTime = today.getTime() - startDay.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      const current = Math.max(1, Math.min(diffDays, TOTAL_DAYS));
-      setTodayNum(current);
-      setViewDay(current);
-    };
-    calculateCurrentDay();
-    const timer = setInterval(calculateCurrentDay, 60000);
-    return () => clearInterval(timer);
-  }, []);
+            useEffect(() => {
+                const now = new Date();
+                const diffTime = now.getTime() - START_DATE.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                const current = Math.max(1, Math.min(diffDays, TOTAL_DAYS));
+                setTodayNum(current);
+                setViewDay(current);
+            }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'challenges'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newData = {};
-      snapshot.forEach((doc) => {
-        newData[doc.id] = doc.data().days || {};
-      });
-      setData(newData);
-    }, (error) => {
-      console.error("Firestore error:", error);
-    });
-    return () => unsubscribe();
-  }, [user]);
+            useEffect(() => {
+                if (!user) return;
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'challenges'));
+                return onSnapshot(q, (snap) => {
+                    const newData = {};
+                    snap.forEach(doc => { newData[doc.id] = doc.data().days || {}; });
+                    setData(newData);
+                });
+            }, [user]);
 
-  const toggleTask = async (memberIdx, day, taskId) => {
-    if (!user) return;
-    const memberData = data[memberIdx] || {};
-    const dayData = memberData[day] || {};
-    const newValue = !dayData[taskId];
-    const updatedDayData = { ...dayData, [taskId]: newValue };
-    const updatedMemberData = { ...memberData, [day]: updatedDayData };
+            const toggleTask = async (memberIdx, day, taskId) => {
+                const memberData = data[memberIdx] || {};
+                const dayData = memberData[day] || {};
+                const updated = { ...memberData, [day]: { ...dayData, [taskId]: !dayData[taskId] } };
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'challenges', memberIdx.toString()), { days: updated }, { merge: true });
+            };
 
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'challenges', memberIdx.toString());
-      await setDoc(docRef, { days: updatedMemberData }, { merge: true });
-    } catch (error) {
-      console.error("Update error:", error);
-    }
-  };
+            if (loading) return <div className="flex h-screen items-center justify-center italic text-stone-500">Đang khởi tạo...</div>;
 
-  const getDayStats = (day) => {
-    return MEMBERS.map((name, idx) => {
-      const completedCount = data[idx]?.[day] ? Object.values(data[idx][day]).filter(v => v).length : 0;
-      return {
-        name,
-        completedCount,
-        isFullyDone: completedCount === DAILY_TASKS.length,
-        progress: (completedCount / DAILY_TASKS.length) * 100
-      };
-    });
-  };
+            return (
+                <div className="min-h-screen pb-10">
+                    <header className="bg-red-900 text-amber-100 py-10 px-4 text-center border-b-4 border-amber-500 shadow-2xl">
+                        <h1 className="text-3xl font-bold font-serif uppercase tracking-widest">Xóa "Điếc"</h1>
+                        <p className="mt-2 opacity-80 italic">Hành trình 60 ngày tịnh hóa</p>
+                    </header>
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-100">
-        <Loader2 className="animate-spin text-red-800" size={48} />
-      </div>
-    );
-  }
+                    <div className="max-w-4xl mx-auto px-4 mt-8">
+                        <div className="flex bg-white rounded-t-xl border border-stone-200 overflow-hidden shadow-sm">
+                            <button onClick={() => setViewMode('group')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest ${viewMode === 'group' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400'}`}>Nhóm</button>
+                            <button onClick={() => setViewMode('personal')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest ${viewMode === 'personal' ? 'bg-amber-50 text-red-900 border-b-4 border-red-900' : 'text-stone-400'}`}>Cá nhân</button>
+                        </div>
 
-  // Phần Giao diện (JSX) giống hệt bản online
-  return (
-    <div className="min-h-screen bg-stone-100 font-serif text-stone-900 pb-24">
-      <header className="bg-red-900 text-amber-100 py-8 px-4 text-center shadow-xl border-b-4 border-amber-500 relative overflow-hidden">
-        <h1 className="text-2xl md:text-4xl font-bold mb-2 uppercase tracking-widest relative z-10">Xóa "Điếc"</h1>
-        <h2 className="text-lg md:text-xl font-medium mb-4 opacity-80 relative z-10">Thử Thách 60 Ngày</h2>
-        <div className="max-w-2xl mx-auto italic text-sm border-t border-amber-600/50 pt-4 px-4 relative z-10">
-          "Tu tập như thể đây là khoảnh khắc cuối cùng của đời bạn."
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 mt-6">
-        <div className="flex bg-white rounded-t-lg shadow-sm border-b border-stone-200">
-          <button 
-            onClick={() => setViewMode('group')}
-            className={`flex-1 py-4 text-xs font-bold uppercase ${viewMode === 'group' ? 'text-red-800 border-b-4 border-red-800 bg-amber-50' : 'text-stone-400'}`}
-          >
-            <Users size={16} className="inline mr-2" /> Bảng Vàng Nhóm
-          </button>
-          <button 
-            onClick={() => setViewMode('personal')}
-            className={`flex-1 py-4 text-xs font-bold uppercase ${viewMode === 'personal' ? 'text-red-800 border-b-4 border-red-800 bg-amber-50' : 'text-stone-400'}`}
-          >
-            <User size={16} className="inline mr-2" /> Cá nhân
-          </button>
-        </div>
-
-        {viewMode === 'group' ? (
-          <div className="bg-white p-6 rounded-b-lg shadow-md border-x border-b border-stone-200">
-            <div className="flex justify-between items-center mb-8 pb-4 border-b">
-              <h3 className="text-xl font-bold text-red-900 flex items-center gap-2">
-                <Trophy className="text-amber-500" /> BẢNG VÀNG NHÓM (Ngày {viewDay})
-              </h3>
-              <div className="flex items-center bg-stone-100 rounded-full p-1 border">
-                <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-1 hover:bg-white rounded-full"><ChevronLeft /></button>
-                <span className="px-4 font-bold min-w-[80px] text-center">Ngày {viewDay}</span>
-                <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-1 hover:bg-white rounded-full" disabled={viewDay >= todayNum}><ChevronRight /></button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {getDayStats(viewDay).map((stat, i) => (
-                <div key={i} className={`p-4 rounded-xl border-2 ${stat.isFullyDone ? 'border-amber-400 bg-amber-50' : 'border-stone-100'}`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-bold">{stat.name}</span>
-                    {stat.isFullyDone && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded">Xong</span>}
-                  </div>
-                  <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-700 transition-all" style={{ width: `${stat.progress}%` }}></div>
-                  </div>
+                        {viewMode === 'group' ? (
+                            <div className="bg-white p-6 rounded-b-xl border-x border-b border-stone-200 shadow-md">
+                                <div className="flex justify-between items-center mb-6 border-b pb-4">
+                                    <h2 className="font-bold text-red-900">Bảng Vàng Ngày {viewDay}</h2>
+                                    <div className="flex items-center gap-3 bg-stone-100 px-3 py-1 rounded-full border">
+                                        <button onClick={() => setViewDay(Math.max(1, viewDay - 1))}>←</button>
+                                        <span className="font-bold text-sm">Ngày {viewDay}</span>
+                                        <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} disabled={viewDay >= todayNum} className="disabled:opacity-20">→</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {MEMBERS.map((name, i) => {
+                                        const done = data[i]?.[viewDay] ? Object.values(data[i][viewDay]).filter(v => v).length : 0;
+                                        return (
+                                            <div key={i} className="p-4 rounded-lg border border-stone-100 bg-stone-50 shadow-sm">
+                                                <div className="flex justify-between font-bold text-sm mb-2">
+                                                    <span>{name}</span>
+                                                    <span className={done === 6 ? 'text-amber-600' : 'text-stone-400'}>{done}/6</span>
+                                                </div>
+                                                <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
+                                                    <div className="bg-red-800 h-full transition-all duration-500" style={{width: `${(done/6)*100}%`}}></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white p-6 rounded-b-xl border-x border-b border-stone-200 shadow-md">
+                                <div className="flex gap-2 overflow-x-auto pb-4 mb-4 scrollbar-hide">
+                                    {MEMBERS.map((name, i) => (
+                                        <button key={i} onClick={() => setSelectedMember(i)} className={`px-4 py-2 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${selectedMember === i ? 'bg-red-900 text-white border-red-900' : 'bg-stone-50 text-stone-500'}`}>
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                                {selectedMember !== null ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="grid grid-cols-10 gap-1 bg-stone-50 p-3 rounded-lg border">
+                                            {[...Array(60)].map((_, i) => (
+                                                <div key={i} className={`aspect-square text-[8px] flex items-center justify-center rounded border ${i+1 > todayNum ? 'opacity-10' : (i+1 === viewDay ? 'border-red-600 bg-red-50' : 'bg-white text-stone-300')}`}>
+                                                    {i+1}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="bg-stone-800 text-stone-100 p-5 rounded-xl shadow-lg border-t-4 border-amber-500">
+                                            <h3 className="font-bold text-amber-400 border-b border-stone-700 pb-2 mb-4">Ngày {viewDay}</h3>
+                                            <div className="space-y-2">
+                                                {DAILY_TASKS.map(t => (
+                                                    <button key={t.id} onClick={() => toggleTask(selectedMember, viewDay, t.id)} className={`w-full text-left p-3 rounded text-[11px] flex items-center gap-3 transition-all ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-600/20 text-amber-200 border border-amber-600/40' : 'bg-stone-700/50 text-stone-400 border border-transparent'}`}>
+                                                        <div className={`w-3 h-3 rounded-full border ${data[selectedMember]?.[viewDay]?.[t.id] ? 'bg-amber-500 border-amber-500' : 'border-stone-500'}`}></div>
+                                                        {t.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : <div className="text-center py-10 text-stone-300 italic">Chọn một Pháp hữu để tiếp tục</div>}
+                            </div>
+                        )}
+                    </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white p-6 rounded-b-lg shadow-md border-x border-b border-stone-200">
-            <div className="flex gap-2 overflow-x-auto pb-6">
-              {MEMBERS.map((m, i) => (
-                <button key={i} onClick={() => setSelectedMember(i)} className={`px-4 py-2 rounded-lg text-sm border-2 ${selectedMember === i ? 'bg-red-800 text-white border-red-900' : 'bg-stone-50 border-stone-200'}`}>
-                  {m}
-                </button>
-              ))}
-            </div>
-            
-            {selectedMember !== null && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                  <div className="grid grid-cols-6 sm:grid-cols-10 gap-1.5 p-4 bg-stone-50 rounded-xl">
-                    {[...Array(TOTAL_DAYS)].map((_, i) => (
-                      <button key={i} onClick={() => setViewDay(i+1)} disabled={i+1 > todayNum} className={`aspect-square rounded text-[10px] font-bold border ${i+1 === viewDay ? 'ring-2 ring-red-600' : ''} ${i+1 > todayNum ? 'opacity-20' : (getDayStats(i+1)[selectedMember].isFullyDone ? 'bg-amber-500 text-white' : 'bg-white text-stone-400')}`}>
-                        {i+1}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-stone-800 text-stone-100 p-5 rounded-xl border-t-4 border-amber-500">
-                  <h3 className="text-lg font-bold text-amber-400 mb-4 border-b border-stone-700 pb-2">Ngày {viewDay}</h3>
-                  <div className="space-y-4">
-                    {DAILY_TASKS.map(task => (
-                      <button key={task.id} onClick={() => toggleTask(selectedMember, viewDay, task.id)} className={`w-full flex items-center gap-3 p-2 rounded text-left text-xs ${data[selectedMember.toString()]?.[viewDay]?.[task.id] ? 'bg-amber-600/20 text-amber-200' : 'bg-stone-700/30 text-stone-400'}`}>
-                        {data[selectedMember.toString()]?.[viewDay]?.[task.id] ? <CheckCircle2 size={14} className="text-amber-500" /> : <Circle size={14} />}
-                        {task.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
-  );
-};
+            );
+        };
 
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
