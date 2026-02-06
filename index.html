@@ -5,53 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hành Trình 60 Ngày Xóa Điếc</title>
     
-    <!-- React & ReactDOM -->
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Lucide Icons (UMD) -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Roboto:wght@300;400;700&display=swap');
         
-        body {
-            font-family: 'Roboto', sans-serif;
-        }
-        .font-serif {
-            font-family: 'Playfair Display', serif;
-        }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        body { font-family: 'Roboto', sans-serif; margin: 0; padding: 0; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .animate-in {
-            animation: fadeIn 0.5s ease-out forwards;
+        .animate-in { animation: fadeIn 0.5s ease-out forwards; }
+        
+        #fallback-loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f5f5f4; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 9999;
         }
     </style>
 </head>
 <body class="bg-stone-50">
+    <!-- Màn hình chờ nếu React chưa load xong -->
+    <div id="fallback-loader">
+        <div style="width: 40px; height: 40px; border: 4px solid #78350f; border-top: 4px solid transparent; border-radius: 50%; animate: spin 1s linear infinite;"></div>
+        <p style="margin-top: 20px; color: #78350f; font-weight: bold; font-family: sans-serif; letter-spacing: 2px;">KHỞI TẠO TÂM THỨC...</p>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+    </div>
+
     <div id="root"></div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+    <!-- Firebase SDKs - Sử dụng bản Compat để ổn định hơn trong file đơn -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Cấu hình Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
             authDomain: "day-challenge-39df2.firebaseapp.com",
@@ -61,48 +65,24 @@
             appId: "1:1083656610996:web:67780223432a21866323e1"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        // Khởi tạo Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
         const appId = "sixty-day-challenge-v1";
 
-        window.firebaseTools = { auth, db, appId, doc, setDoc, onSnapshot, collection, query, signInAnonymously, onAuthStateChanged };
-    </script>
-
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, createElement } = React;
-
-        // Xử lý Lucide Icons trong môi trường trình duyệt
-        // Lucide khi dùng script tag sẽ phơi ra đối tượng `lucide` toàn cục
+        // Thành phần Icon an toàn
         const Icon = ({ name, size = 24, className = "" }) => {
-            const iconData = lucide.icons[name];
-            if (!iconData) return null;
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [name]);
             
-            // Chuyển đổi cấu trúc dữ liệu của Lucide sang React elements
-            return (
-                <svg
-                    width={size}
-                    height={size}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={className}
-                    dangerouslySetInnerHTML={{
-                        __html: iconData[1].map(tag => {
-                            const [tagName, attrs] = tag;
-                            const attrStr = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
-                            return `<${tagName} ${attrStr} />`;
-                        }).join('')
-                    }}
-                />
-            );
+            return <i data-lucide={name.toLowerCase().replace(/([a-z])([A-Z])/g, '$1-$2')} style={{width: size, height: size}} className={className}></i>;
         };
 
         const App = () => {
-            const [fb, setFb] = useState(null);
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [passInput, setPassInput] = useState("");
             const [user, setUser] = useState(null);
@@ -118,97 +98,60 @@
             const START_DATE = new Date('2026-01-23'); 
             const PASSWORD = "elephan";
             const MEMBERS = ["Bảo Bình", "Bình Minh", "Phượng", "Phương", "Trang", "Điện", "Ánh Dương", "Thanh Thảo", "Linh", "Quân", "Hằng"];
-            
-            const DAILY_TASKS = [
-                { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện' },
-                { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy' },
-                { id: 'khau_hanh', label: '4 Giới & 4 Thiện hạnh về Khẩu' },
-                { id: 'am_thanh', label: 'Giải phóng cơ thể & Âm thanh' },
-                { id: 'tri_chu', label: 'Nghi quỹ 3Kaya & Cúng Hộ Pháp' },
-                { id: 'thien_quan', label: 'Thiền 10p & Quán Đức Phổ Hiền' }
-            ];
-
-            const ATOMIC_TASKS = [
-                { id: 'at_rang', label: 'Đánh răng' },
-                { id: 'at_mat', label: 'Rửa mặt' },
-                { id: 'at_bo', label: 'Đi bộ' },
-                { id: 'at_toc', label: 'Chải tóc' },
-                { id: 'at_an', label: 'Ăn' },
-                { id: 'at_uong', label: 'Uống' },
-                { id: 'at_ao', label: 'Mặc quần áo' }
-            ];
-
-            const CHALLENGES = [
-                { id: 'ch_ngu', label: 'Ngày ngủ 4 tiếng' },
-                { id: 'ch_chay', label: 'Ăn đồ ăn chay' },
-                { id: 'ch_thit', label: 'Không ăn thịt' },
-                { id: 'ch_thoi', label: 'Ngày 6 thời khóa' }
-            ];
-
-            const MICRO_LEARNING = [
-                { id: 'quy_y', title: 'Quy y', content: 'Quy y là đặt niềm tin trọn vẹn vào Tam Bảo: Phật, Pháp, Tăng. Đây là cánh cửa đầu tiên để bước vào con đường giác ngộ.' },
-                { id: 'luc_do', title: 'Lục độ ba la mật', content: 'Sáu hạnh của Bồ tát: Bố thí, Trì giới, Nhẫn nhục, Tinh tấn, Thiền định, Trí tuệ.' },
-                { id: 'ngoai_mat', title: 'Ngoại mật', content: 'Các pháp tu tập hướng về hình thức bên ngoài, tịnh hóa thân và môi trường xung quanh.' },
-                { id: 'noi_mat', title: 'Nội mật', content: 'Các pháp tu tập sâu vào tâm thức, khí, mạch và minh điểm bên trong cơ thể.' }
-            ];
 
             useEffect(() => {
-                const checkFb = setInterval(() => {
-                    if (window.firebaseTools) {
-                        setFb(window.firebaseTools);
-                        clearInterval(checkFb);
-                    }
-                }, 100);
-                return () => clearInterval(checkFb);
-            }, []);
+                // Tắt màn hình chờ sau khi React sẵn sàng
+                const loader = document.getElementById('fallback-loader');
+                if (loader) loader.style.display = 'none';
 
-            useEffect(() => {
-                if (!fb) return;
-                const unsubscribe = fb.onAuthStateChanged(fb.auth, (u) => {
+                // Lắng nghe Auth
+                const unsubscribe = auth.onAuthStateChanged((u) => {
                     if (u) {
                         setUser(u);
                         setLoading(false);
                     } else {
-                        fb.signInAnonymously(fb.auth);
+                        auth.signInAnonymously().catch(console.error);
                     }
                 });
                 return () => unsubscribe();
-            }, [fb]);
+            }, []);
 
             useEffect(() => {
-                if (!user || !fb) return;
-                const q = fb.query(fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'v2_challenges'));
-                return fb.onSnapshot(q, (snapshot) => {
+                if (!user) return;
+                const path = `artifacts/${appId}/public/data/v2_challenges`;
+                const unsubscribe = db.collection(path).onSnapshot((snapshot) => {
                     const newData = {};
                     snapshot.forEach((doc) => { newData[doc.id] = doc.data(); });
                     setData(newData);
-                });
-            }, [user, fb]);
+                }, (error) => console.error("Firestore Error:", error));
+                return () => unsubscribe();
+            }, [user]);
 
             useEffect(() => {
-                const diff = Math.floor((new Date().getTime() - START_DATE.getTime()) / (1000 * 3600 * 24)) + 1;
+                const now = new Date();
+                const diff = Math.floor((now.getTime() - START_DATE.getTime()) / (1000 * 3600 * 24)) + 1;
                 const current = Math.max(1, Math.min(diff, TOTAL_DAYS));
                 setTodayNum(current);
                 setViewDay(current);
             }, []);
 
             const updateStore = async (memberIdx, field, subKey, taskId, value) => {
-                if (!user || !fb) return;
-                const memberDoc = data[memberIdx] || { days: {}, atomic: {}, longTerm: {} };
-                let updated;
-                if (field === 'days' || field === 'atomic') {
-                    const currentField = memberDoc[field] || {};
-                    const currentDay = currentField[subKey] || {};
-                    updated = { ...currentField, [subKey]: { ...currentDay, [taskId]: value } };
-                } else {
-                    const currentField = memberDoc[field] || {};
-                    updated = { ...currentField, [taskId]: value };
-                }
+                if (!user) return;
+                const docRef = db.collection(`artifacts/${appId}/public/data/v2_challenges`).doc(memberIdx.toString());
+                
                 try {
-                    await fb.setDoc(fb.doc(fb.db, 'artifacts', fb.appId, 'public', 'data', 'v2_challenges', memberIdx.toString()), { 
-                        [field]: updated 
-                    }, { merge: true });
-                } catch (err) { console.error(err); }
+                    let updateObj = {};
+                    if (field === 'days' || field === 'atomic') {
+                        const currentData = data[memberIdx] || {};
+                        const fieldData = currentData[field] || {};
+                        const dayData = fieldData[subKey] || {};
+                        updateObj[field] = { ...fieldData, [subKey]: { ...dayData, [taskId]: value } };
+                    } else {
+                        const fieldData = (data[memberIdx] || {})[field] || {};
+                        updateObj[field] = { ...fieldData, [taskId]: value };
+                    }
+                    await docRef.set(updateObj, { merge: true });
+                } catch (err) { console.error("Update Error:", err); }
             };
 
             const leaderBoard = useMemo(() => {
@@ -217,290 +160,202 @@
                     let totalDaily = 0;
                     let totalAtomic = 0;
                     let totalChallenge = 0;
-                    Object.values(mData.days || {}).forEach(day => { totalDaily += Object.values(day).filter(v => v).length; });
-                    Object.values(mData.atomic || {}).forEach(day => { totalAtomic += Object.values(day).filter(v => v).length; });
-                    totalChallenge = Object.values(mData.longTerm || {}).filter(v => v).length;
+                    
+                    if (mData.days) {
+                        Object.values(mData.days).forEach(day => {
+                            totalDaily += Object.values(day || {}).filter(v => v === true).length;
+                        });
+                    }
+                    if (mData.atomic) {
+                        Object.values(mData.atomic).forEach(day => {
+                            totalAtomic += Object.values(day || {}).filter(v => v === true).length;
+                        });
+                    }
+                    if (mData.longTerm) {
+                        totalChallenge = Object.values(mData.longTerm).filter(v => v === true).length;
+                    }
+                    
                     const score = (totalDaily * 10) + (totalAtomic * 2) + (totalChallenge * 50);
                     return { name, idx, totalDaily, totalAtomic, totalChallenge, score };
                 }).sort((a, b) => b.score - a.score);
             }, [data]);
 
-            const handleLogin = (e) => {
-                e.preventDefault();
-                if (passInput.toLowerCase() === PASSWORD) setIsAuthenticated(true);
-                else alert("Mật khẩu không đúng!");
-            };
-
-            if (loading) return (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-stone-100">
-                    <Icon name="Loader2" className="animate-spin text-red-800 mb-4" size={48} />
-                    <p className="text-stone-500 font-bold tracking-widest animate-pulse uppercase text-xs">Đang kết nối tâm thức...</p>
-                </div>
-            );
+            if (loading) return null; // Fallback loader sẽ xử lý phần này
 
             if (!isAuthenticated) return (
                 <div className="min-h-screen flex items-center justify-center bg-stone-900 p-6">
-                    <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border-t-8 border-red-800">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border-t-8 border-red-800 animate-in">
                         <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                             <Icon name="Lock" className="text-red-800" size={36} />
                         </div>
                         <h2 className="text-3xl font-black text-stone-800 mb-2 font-serif">ĐẠO TRÀNG XÓA ĐIẾC</h2>
-                        <p className="text-stone-500 mb-8 text-sm italic">"Hãy để lòng kiên định dẫn lối bạn qua 60 ngày thử thách"</p>
+                        <p className="text-stone-500 mb-8 text-sm italic">Nhập mật khẩu để bắt đầu hành trình</p>
                         <input 
                             type="password" 
                             value={passInput}
                             onChange={(e) => setPassInput(e.target.value)}
-                            placeholder="Nhập mật khẩu truy cập..."
-                            className="w-full px-5 py-4 rounded-xl border-2 border-stone-100 mb-6 focus:border-red-800 focus:ring-4 focus:ring-red-50 outline-none transition-all text-center text-xl tracking-widest"
+                            onKeyPress={(e) => e.key === 'Enter' && (passInput.toLowerCase() === PASSWORD ? setIsAuthenticated(true) : alert("Sai mật khẩu"))}
+                            placeholder="Mật khẩu..."
+                            className="w-full px-5 py-4 rounded-xl border-2 border-stone-100 mb-6 focus:border-red-800 outline-none text-center text-xl tracking-widest"
                         />
-                        <button type="submit" className="w-full bg-red-800 text-white py-4 rounded-xl font-bold hover:bg-red-900 transition-all shadow-lg hover:shadow-red-200 active:scale-95">
-                            BẮT ĐẦU TU TẬP
+                        <button 
+                            onClick={() => passInput.toLowerCase() === PASSWORD ? setIsAuthenticated(true) : alert("Sai mật khẩu")}
+                            className="w-full bg-red-800 text-white py-4 rounded-xl font-bold hover:bg-red-900 transition-all"
+                        >
+                            VÀO HỆ THỐNG
                         </button>
-                    </form>
+                    </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen bg-stone-50 text-stone-900 pb-20 font-sans">
-                    <header className="bg-red-900 text-amber-50 py-12 px-6 text-center shadow-lg border-b-8 border-amber-500 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
-                        <h1 className="text-4xl md:text-6xl font-black mb-3 uppercase tracking-tighter font-serif">HÀNH TRÌNH 60 NGÀY</h1>
-                        <p className="opacity-70 text-sm md:text-lg italic tracking-[0.2em] uppercase font-light">Khai Mở Tâm Thức - Chặt Đứt Vòng Luân Hồi</p>
+                <div className="min-h-screen bg-stone-50 text-stone-900 pb-20">
+                    <header className="bg-red-900 text-amber-50 py-12 px-6 text-center shadow-lg border-b-8 border-amber-500">
+                        <h1 className="text-4xl md:text-5xl font-black mb-3 font-serif uppercase tracking-tight">HÀNH TRÌNH 60 NGÀY</h1>
+                        <p className="opacity-70 text-sm uppercase tracking-[0.2em] font-light italic">Khai Mở Tâm Thức - Xóa Bỏ Vô Minh</p>
                     </header>
 
-                    <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-md border-b flex overflow-x-auto no-scrollbar whitespace-nowrap px-4 justify-center">
+                    <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-md flex overflow-x-auto no-scrollbar px-4 justify-center">
                         {[
                             { id: 'leaderboard', icon: 'Trophy', label: 'Bảng Vàng' },
                             { id: 'personal', icon: 'Flame', label: 'Tu Tập' },
                             { id: 'atomic', icon: 'Zap', label: 'Thói Quen' },
                             { id: 'challenges', icon: 'Target', label: 'Thử Thách' },
-                            { id: 'learning', icon: 'BookOpen', label: 'Giáo Pháp' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() => { setViewMode(tab.id); setActiveLesson(null); }}
+                                onClick={() => setViewMode(tab.id)}
                                 className={`px-6 py-5 flex items-center gap-2 font-bold text-xs uppercase tracking-widest transition-all relative ${viewMode === tab.id ? 'text-red-800' : 'text-stone-400 hover:text-stone-600'}`}
                             >
                                 <Icon name={tab.icon} size={18} /> {tab.label}
-                                {viewMode === tab.id && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-800 rounded-t-full"></div>}
+                                {viewMode === tab.id && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-800"></div>}
                             </button>
                         ))}
                     </nav>
 
-                    <main className="max-w-6xl mx-auto px-4 mt-10">
+                    <main className="max-w-5xl mx-auto px-4 mt-8">
                         {viewMode === 'leaderboard' && (
-                            <div className="animate-in">
-                                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-stone-100">
-                                    <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-8 text-white flex justify-between items-center">
-                                        <div>
-                                            <h2 className="text-3xl font-black flex items-center gap-3 font-serif uppercase tracking-tight">Bảng Vàng Công Đức</h2>
-                                            <p className="text-amber-100 text-sm mt-1">Ghi nhận sự tinh tấn của các hành giả</p>
-                                        </div>
-                                        <Icon name="Star" className="animate-pulse hidden md:block" size={40} />
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left">
-                                            <thead className="bg-stone-50 text-[11px] uppercase font-bold text-stone-400 tracking-widest border-b">
-                                                <tr>
-                                                    <th className="px-8 py-5">Hạng</th>
-                                                    <th className="px-8 py-5">Pháp Hữu</th>
-                                                    <th className="px-8 py-5 text-center">Tu Tập</th>
-                                                    <th className="px-8 py-5 text-center">Thói Quen</th>
-                                                    <th className="px-8 py-5 text-center">Thử Thách</th>
-                                                    <th className="px-8 py-5 text-right">Tổng Điểm</th>
+                            <div className="bg-white rounded-3xl shadow-xl overflow-hidden animate-in">
+                                <div className="bg-amber-500 p-6 text-white flex justify-between items-center">
+                                    <h2 className="text-2xl font-black font-serif uppercase tracking-tight">Xếp Hạng Tinh Tấn</h2>
+                                    <Icon name="Medal" size={32} />
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-stone-50 text-[10px] uppercase font-bold text-stone-400 tracking-widest border-b">
+                                            <tr>
+                                                <th className="px-6 py-4">Hạng</th>
+                                                <th className="px-6 py-4">Pháp Hữu</th>
+                                                <th className="px-6 py-4 text-center">Tổng Điểm</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stone-100">
+                                            {leaderBoard.map((item, i) => (
+                                                <tr key={item.idx} className={i < 3 ? 'bg-amber-50/30' : ''}>
+                                                    <td className="px-6 py-5 font-bold text-stone-400">{i + 1}</td>
+                                                    <td className="px-6 py-5 font-bold text-stone-800">{item.name}</td>
+                                                    <td className="px-6 py-5 text-center font-black text-red-800">{item.score}</td>
                                                 </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-stone-100">
-                                                {leaderBoard.map((item, i) => (
-                                                    <tr key={item.idx} className={`hover:bg-amber-50/50 transition-colors ${i < 3 ? 'bg-amber-50/20' : ''}`}>
-                                                        <td className="px-8 py-6">
-                                                            {i === 0 ? <Icon name="Medal" className="text-amber-500" size={28} /> : 
-                                                             i === 1 ? <Icon name="Medal" className="text-stone-400" size={28} /> :
-                                                             i === 2 ? <Icon name="Medal" className="text-amber-700" size={28} /> : 
-                                                             <span className="font-bold text-stone-300 ml-2 text-lg">{i + 1}</span>}
-                                                        </td>
-                                                        <td className="px-8 py-6">
-                                                            <div className="font-bold text-stone-800 text-lg">{item.name}</div>
-                                                        </td>
-                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalDaily}</td>
-                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalAtomic}</td>
-                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalChallenge}</td>
-                                                        <td className="px-8 py-6 text-right font-black text-red-800 text-xl tracking-tighter">{item.score.toLocaleString()}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}
 
                         {(viewMode === 'personal' || viewMode === 'atomic') && (
                             <div className="animate-in">
-                                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10">
-                                    <div className="lg:col-span-2">
-                                        <div className="flex items-center justify-between mb-6 bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
-                                            <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200"><Icon name="ChevronLeft"/></button>
-                                            <div className="text-center">
-                                                <span className="block text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-1">Tiến trình hiện tại</span>
-                                                <span className="font-black text-2xl font-serif">Ngày {viewDay} / 60</span>
-                                            </div>
-                                            <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200" disabled={viewDay >= todayNum}><Icon name="ChevronRight"/></button>
-                                        </div>
-                                        <div className="grid grid-cols-6 sm:grid-cols-10 gap-3 p-6 bg-white rounded-3xl shadow-sm border border-stone-100">
-                                            {[...Array(TOTAL_DAYS)].map((_, i) => {
-                                                const dNum = i + 1;
-                                                const isCompleted = viewMode === 'personal' 
-                                                    ? Object.values(data[selectedMember]?.days?.[dNum] || {}).filter(v => v).length === DAILY_TASKS.length
-                                                    : Object.values(data[selectedMember]?.atomic?.[dNum] || {}).filter(v => v).length === ATOMIC_TASKS.length;
-                                                return (
-                                                    <button
-                                                        key={i}
-                                                        onClick={() => setViewDay(dNum)}
-                                                        disabled={dNum > todayNum}
-                                                        className={`aspect-square rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center ${
-                                                            viewDay === dNum ? 'border-red-800 bg-red-50 text-red-800 ring-4 ring-red-50 scale-105 z-10 shadow-lg' : 
-                                                            dNum > todayNum ? 'opacity-20 cursor-not-allowed bg-stone-50' : 
-                                                            isCompleted ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white text-stone-300 border-stone-100'
-                                                        }`}
-                                                    >
-                                                        {dNum}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
+                                    {MEMBERS.map((m, i) => (
+                                        <button key={i} onClick={() => setSelectedMember(i)} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedMember === i ? 'bg-red-800 text-white shadow-md' : 'bg-white text-stone-400 border border-stone-200'}`}>
+                                            {m}
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                <div className="bg-white p-6 rounded-3xl shadow-md border border-stone-100 mb-8 flex items-center justify-between">
+                                    <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-2 bg-stone-50 rounded-full"><Icon name="ChevronLeft"/></button>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Tiến trình</p>
+                                        <h3 className="text-xl font-black font-serif">Ngày {viewDay}</h3>
                                     </div>
-                                    <div className="bg-stone-900 text-stone-100 p-8 rounded-3xl shadow-2xl h-fit border-t-8 border-amber-500">
-                                        <h3 className="text-2xl font-black mb-8 text-amber-400 flex items-center gap-3 font-serif">
-                                            <Icon name={viewMode === 'personal' ? 'Flame' : 'Zap'} size={28}/>
-                                            {viewMode === 'personal' ? 'KHÓA LỄ NGÀY' : 'THÓI QUEN NHỎ'}
-                                        </h3>
-                                        <div className="space-y-4">
-                                            {(viewMode === 'personal' ? DAILY_TASKS : ATOMIC_TASKS).map(task => (
-                                                <TaskItem 
-                                                    key={task.id}
-                                                    label={task.label}
-                                                    isChecked={data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]}
-                                                    onToggle={() => updateStore(
-                                                        selectedMember, 
-                                                        viewMode === 'personal' ? 'days' : 'atomic', 
-                                                        viewDay, 
-                                                        task.id, 
-                                                        !data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]
-                                                    )}
-                                                />
-                                            ))}
-                                        </div>
+                                    <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-2 bg-stone-50 rounded-full" disabled={viewDay >= todayNum}><Icon name="ChevronRight"/></button>
+                                </div>
+
+                                <div className="bg-stone-900 text-white p-8 rounded-3xl shadow-2xl border-t-8 border-amber-500">
+                                    <h4 className="text-amber-500 font-black mb-6 flex items-center gap-2 font-serif uppercase tracking-widest">
+                                        <Icon name={viewMode === 'personal' ? 'Flame' : 'Zap'} size={20}/>
+                                        {viewMode === 'personal' ? 'Khóa Lễ Ngày' : 'Thói Quen Nhỏ'}
+                                    </h4>
+                                    <div className="space-y-4">
+                                        {(viewMode === 'personal' ? [
+                                            {id: 't1', label: 'Tịnh hóa Thân - Khẩu - Ý'},
+                                            {id: 't2', label: 'Cúng khói & Lễ lạy'},
+                                            {id: 't3', label: 'Giải phóng Âm thanh'},
+                                            {id: 't4', label: 'Nghi quỹ 3Kaya'},
+                                            {id: 't5', label: 'Thiền 10p & Quán tưởng'}
+                                        ] : [
+                                            {id: 'a1', label: 'Đánh răng'},
+                                            {id: 'a2', label: 'Rửa mặt'},
+                                            {id: 'a3', label: 'Đi bộ'},
+                                            {id: 'a4', label: 'Uống nước'},
+                                            {id: 'a5', label: 'Mặc áo'}
+                                        ]).map(task => (
+                                            <button
+                                                key={task.id}
+                                                onClick={() => updateStore(selectedMember, viewMode === 'personal' ? 'days' : 'atomic', viewDay, task.id, !((data[selectedMember] || {})[viewMode === 'personal' ? 'days' : 'atomic'] || {})[viewDay]?.[task.id])}
+                                                className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 text-left ${
+                                                    ((data[selectedMember] || {})[viewMode === 'personal' ? 'days' : 'atomic'] || {})[viewDay]?.[task.id] 
+                                                    ? 'bg-amber-600/20 border-amber-500/50 text-amber-100' 
+                                                    : 'bg-stone-800/50 border-stone-700/50 text-stone-500'
+                                                }`}
+                                            >
+                                                <Icon name={((data[selectedMember] || {})[viewMode === 'personal' ? 'days' : 'atomic'] || {})[viewDay]?.[task.id] ? "CheckCircle2" : "Circle"} size={20} />
+                                                <span className="font-bold text-sm">{task.label}</span>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {viewMode === 'challenges' && (
-                            <div className="animate-in max-w-2xl mx-auto">
-                                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
-                                <div className="mt-10 bg-white p-10 rounded-3xl shadow-2xl border-2 border-stone-50 text-center">
-                                    <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Icon name="Target" className="text-red-800" size={40} />
-                                    </div>
-                                    <h3 className="text-3xl font-black font-serif mb-2 text-stone-800 uppercase">THỬ THÁCH VÔ THƯỜNG</h3>
-                                    <p className="text-stone-400 italic mb-10">"Sự kiên trì là nền tảng của mọi thành tựu tâm linh"</p>
-                                    <div className="space-y-4 text-left">
-                                        {CHALLENGES.map(ch => (
+                            <div className="max-w-md mx-auto animate-in">
+                                <div className="bg-white p-8 rounded-3xl shadow-xl text-center border-t-8 border-red-800">
+                                    <Icon name="Target" className="text-red-800 mx-auto mb-4" size={40} />
+                                    <h3 className="text-2xl font-black font-serif uppercase mb-6">Thử Thách Dài Hạn</h3>
+                                    <div className="space-y-3">
+                                        {[
+                                            {id: 'c1', label: 'Ngày ngủ 4 tiếng'},
+                                            {id: 'c2', label: 'Ăn chay hoàn toàn'},
+                                            {id: 'c3', label: 'Không ăn thịt đỏ'},
+                                            {id: 'c4', label: 'Đủ 6 thời khóa'}
+                                        ].map(ch => (
                                             <button
                                                 key={ch.id}
-                                                onClick={() => updateStore(selectedMember, 'longTerm', null, ch.id, !data[selectedMember]?.longTerm?.[ch.id])}
-                                                className={`w-full p-6 rounded-2xl flex items-center gap-5 border-2 transition-all ${
-                                                    data[selectedMember]?.longTerm?.[ch.id] 
+                                                onClick={() => updateStore(selectedMember, 'longTerm', null, ch.id, !((data[selectedMember] || {}).longTerm || {})[ch.id])}
+                                                className={`w-full p-5 rounded-2xl flex items-center gap-4 border-2 transition-all ${
+                                                    ((data[selectedMember] || {}).longTerm || {})[ch.id] 
                                                     ? 'bg-amber-50 border-amber-500 text-amber-900 shadow-inner' 
-                                                    : 'bg-stone-50 border-stone-100 text-stone-500 hover:border-stone-200'
+                                                    : 'bg-stone-50 border-stone-100 text-stone-400'
                                                 }`}
                                             >
-                                                {data[selectedMember]?.longTerm?.[ch.id] ? <Icon name="CheckCircle2" className="text-amber-500" size={24} /> : <Icon name="Circle" className="opacity-20" size={24} />}
-                                                <span className="font-bold text-xl">{ch.label}</span>
+                                                <Icon name={((data[selectedMember] || {}).longTerm || {})[ch.id] ? "CheckCircle2" : "Circle"} size={20} />
+                                                <span className="font-bold">{ch.label}</span>
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        {viewMode === 'learning' && (
-                            <div className="animate-in">
-                                {!activeLesson ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        {MICRO_LEARNING.map(lesson => (
-                                            <button
-                                                key={lesson.id}
-                                                onClick={() => setActiveLesson(lesson)}
-                                                className="bg-white p-10 rounded-3xl shadow-sm border-2 border-transparent hover:border-red-800 hover:shadow-2xl transition-all text-left group flex flex-col h-full"
-                                            >
-                                                <div className="bg-red-50 text-red-800 w-16 h-16 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-red-800 group-hover:text-white transition-all">
-                                                    <Icon name="BookOpen" size={32} />
-                                                </div>
-                                                <h3 className="text-2xl font-black mb-4 font-serif">{lesson.title}</h3>
-                                                <p className="text-stone-400 text-sm flex-grow italic leading-relaxed">Khám phá các khía cạnh thâm sâu của {lesson.title.toLowerCase()} và ứng dụng vào hành trình tu tập.</p>
-                                                <div className="mt-10 flex items-center text-red-800 font-bold text-xs uppercase tracking-[0.2em] gap-2">
-                                                    CHI TIẾT GIÁO PHÁP <Icon name="ChevronRight" size={14} />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="bg-white p-8 md:p-16 rounded-3xl shadow-2xl border border-stone-100 animate-in">
-                                        <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-stone-400 hover:text-red-800 mb-10 font-bold transition-colors uppercase tracking-widest text-xs">
-                                            <Icon name="ArrowLeft" size={16} /> TRỞ LẠI THƯ VIỆN
-                                        </button>
-                                        <h2 className="text-5xl font-black mb-10 border-b-8 border-amber-500 pb-6 inline-block font-serif text-stone-800 uppercase">{activeLesson.title}</h2>
-                                        <div className="text-xl leading-relaxed text-stone-600 whitespace-pre-wrap font-light">
-                                            {activeLesson.content}
-                                        </div>
-                                        <div className="mt-16 p-8 bg-stone-50 rounded-2xl border-l-8 border-red-800 italic text-stone-500 text-lg shadow-inner">
-                                            "Pháp vốn không có ngôn từ, nhưng nhờ ngôn từ mà ta nhận ra chân lý."
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </main>
 
-                    <footer className="mt-32 py-16 border-t border-stone-200 text-center opacity-40 text-[10px] tracking-[0.5em] uppercase font-bold text-stone-400 px-6 leading-loose">
-                        Nguyện đem công đức này &bull; Hướng về khắp tất cả &bull; Đệ tử và chúng sinh &bull; Đều trọn thành Phật đạo
+                    <footer className="mt-20 py-10 border-t border-stone-200 text-center opacity-30 text-[9px] uppercase tracking-[0.3em] font-bold text-stone-400 px-6">
+                        Đạo Tràng Xóa Điếc &bull; Tinh Tấn Mỗi Ngày
                     </footer>
                 </div>
             );
         };
-
-        const MemberSelector = ({ members, selected, onSelect }) => (
-            <div className="bg-white p-3 rounded-2xl shadow-sm border border-stone-100 flex gap-2 overflow-x-auto no-scrollbar mb-4">
-                {members.map((m, i) => (
-                    <button
-                        key={i}
-                        onClick={() => onSelect(i)}
-                        className={`px-6 py-3 rounded-xl whitespace-nowrap text-xs font-bold transition-all uppercase tracking-widest ${
-                            selected === i ? 'bg-red-800 text-white shadow-lg scale-105' : 'text-stone-400 hover:bg-stone-50'
-                        }`}
-                    >
-                        {m}
-                    </button>
-                ))}
-            </div>
-        );
-
-        const TaskItem = ({ label, isChecked, onToggle }) => (
-            <button
-                onClick={onToggle}
-                className={`w-full flex items-start gap-4 p-5 rounded-2xl transition-all border-2 text-left group ${
-                    isChecked ? 'bg-amber-600/20 border-amber-500/30 text-amber-100' : 'bg-stone-800/50 border-stone-700/50 text-stone-400 hover:bg-stone-800 hover:border-stone-600'
-                }`}
-            >
-                <div className="mt-1 transition-transform group-active:scale-90">
-                    {isChecked ? <Icon name="CheckCircle2" className="text-amber-500" size={22} /> : <Icon name="Circle" className="opacity-20" size={22} />}
-                </div>
-                <span className="text-base font-bold leading-tight">{label}</span>
-            </button>
-        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
