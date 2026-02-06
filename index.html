@@ -1,475 +1,488 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  collection, 
-  query 
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Sun, 
-  Moon, 
-  Sunrise, 
-  Flame, 
-  User, 
-  Calendar,
-  Users,
-  Trophy,
-  Loader2,
-  Lock,
-  BookOpen,
-  Zap,
-  Target,
-  ChevronLeft,
-  ChevronRight,
-  ArrowLeft,
-  Medal,
-  Star
-} from 'lucide-react';
-
-// --- CẤU HÌNH FIREBASE ---
-const firebaseConfig = {
-    apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
-    authDomain: "day-challenge-39df2.firebaseapp.com",
-    projectId: "day-challenge-39df2",
-    storageBucket: "day-challenge-39df2.firebasestorage.app",
-    messagingSenderId: "1083656610996",
-    appId: "1:1083656610996:web:67780223432a21866323e1"
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
-const appId = "sixty-day-challenge-v1";
-
-const App = () => {
-  const TOTAL_DAYS = 60;
-  const START_DATE = new Date('2026-01-23'); 
-  const PASSWORD = "elephan";
-
-  const MEMBERS = [
-    "Bảo Bình", "Bình Minh", "Phượng", "Phương", 
-    "Trang", "Điện", "Ánh Dương", "Thanh Thảo", 
-    "Linh", "Quân", "Hằng"
-  ];
-
-  const DAILY_TASKS = [
-    { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện', session: 'morning_wake' },
-    { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy', session: 'morning_practice' },
-    { id: 'khau_hanh', label: '4 Giới & 4 Thiện hạnh về Khẩu', session: 'daytime' },
-    { id: 'am_thanh', label: 'Giải phóng cơ thể & Âm thanh', session: 'daytime' },
-    { id: 'tri_chu', label: 'Nghi quỹ 3Kaya & Cúng Hộ Pháp', session: 'evening' },
-    { id: 'thien_quan', label: 'Thiền 10p & Quán Đức Phổ Hiền', session: 'evening' }
-  ];
-
-  const ATOMIC_TASKS = [
-    { id: 'at_rang', label: 'Đánh răng' },
-    { id: 'at_mat', label: 'Rửa mặt' },
-    { id: 'at_bo', label: 'Đi bộ' },
-    { id: 'at_toc', label: 'Chải tóc' },
-    { id: 'at_an', label: 'Ăn' },
-    { id: 'at_uong', label: 'Uống' },
-    { id: 'at_ao', label: 'Mặc quần áo' }
-  ];
-
-  const CHALLENGES = [
-    { id: 'ch_ngu', label: 'Ngày ngủ 4 tiếng' },
-    { id: 'ch_chay', label: 'Ăn đồ ăn chay' },
-    { id: 'ch_thit', label: 'Không ăn thịt' },
-    { id: 'ch_thoi', label: 'Ngày 6 thời khóa' }
-  ];
-
-  const MICRO_LEARNING = [
-    { id: 'quy_y', title: 'Quy y', content: 'Quy y là đặt niềm tin trọn vẹn vào Tam Bảo: Phật, Pháp, Tăng. Đây là cánh cửa đầu tiên để bước vào con đường giác ngộ.' },
-    { id: 'luc_do', title: 'Lục độ ba la mật', content: 'Sáu hạnh của Bồ tát: Bố thí, Trì giới, Nhẫn nhục, Tinh tấn, Thiền định, Trí tuệ.' },
-    { id: 'ngoai_mat', title: 'Ngoại mật', content: 'Các pháp tu tập hướng về hình thức bên ngoài, tịnh hóa thân và môi trường xung quanh.' },
-    { id: 'noi_mat', title: 'Nội mật', content: 'Các pháp tu tập sâu vào tâm thức, khí, mạch và minh điểm bên trong cơ thể.' }
-  ];
-
-  // States
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passInput, setPassInput] = useState("");
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedMember, setSelectedMember] = useState(0);
-  const [viewDay, setViewDay] = useState(1);
-  const [todayNum, setTodayNum] = useState(1);
-  const [data, setData] = useState({}); 
-  const [viewMode, setViewMode] = useState('leaderboard'); // 'leaderboard', 'personal', 'atomic', 'learning', 'challenges'
-  const [activeLesson, setActiveLesson] = useState(null);
-
-  // 1. Auth & Firebase Initialization
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) { console.error(err); }
-    };
-    initAuth();
-    onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
-  }, []);
-
-  // 2. Data Sync
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'v2_challenges'));
-    return onSnapshot(q, (snapshot) => {
-      const newData = {};
-      snapshot.forEach((doc) => { newData[doc.id] = doc.data(); });
-      setData(newData);
-    }, (error) => {
-      console.error("Firestore Error:", error);
-    });
-  }, [user]);
-
-  // 3. Time Logic
-  useEffect(() => {
-    const calc = () => {
-      const diff = Math.floor((new Date().getTime() - START_DATE.getTime()) / (1000 * 3600 * 24)) + 1;
-      const current = Math.max(1, Math.min(diff, TOTAL_DAYS));
-      setTodayNum(current);
-      setViewDay(current);
-    };
-    calc();
-  }, []);
-
-  // 4. Update Logic
-  const updateStore = async (memberIdx, field, subKey, taskId, value) => {
-    if (!user) return;
-    const memberDoc = data[memberIdx] || { days: {}, atomic: {}, longTerm: {} };
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hành Trình 60 Ngày Xóa Điếc</title>
     
-    let updated;
-    if (field === 'days' || field === 'atomic') {
-        const currentField = memberDoc[field] || {};
-        const currentDay = currentField[subKey] || {};
-        updated = { ...currentField, [subKey]: { ...currentDay, [taskId]: value } };
-    } else {
-        const currentField = memberDoc[field] || {};
-        updated = { ...currentField, [taskId]: value };
-    }
-
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'v2_challenges', memberIdx.toString()), { 
-          [field]: updated 
-      }, { merge: true });
-    } catch (err) { console.error(err); }
-  };
-
-  // 5. Ranking Logic
-  const leaderBoard = useMemo(() => {
-    return MEMBERS.map((name, idx) => {
-      const mData = data[idx] || {};
-      let totalDaily = 0;
-      let totalAtomic = 0;
-      let totalChallenge = 0;
-
-      // Tính tổng các ngày hoàn thành
-      Object.values(mData.days || {}).forEach(day => {
-          totalDaily += Object.values(day).filter(v => v).length;
-      });
-      Object.values(mData.atomic || {}).forEach(day => {
-          totalAtomic += Object.values(day).filter(v => v).length;
-      });
-      totalChallenge = Object.values(mData.longTerm || {}).filter(v => v).length;
-
-      const score = (totalDaily * 10) + (totalAtomic * 2) + (totalChallenge * 50);
-
-      return { name, idx, totalDaily, totalAtomic, totalChallenge, score };
-    }).sort((a, b) => b.score - a.score);
-  }, [data]);
-
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (passInput.toLowerCase() === PASSWORD) setIsAuthenticated(true);
-    else alert("Mật khẩu không đúng!");
-  };
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-100">
-        <Loader2 className="animate-spin text-red-800" size={40} />
-    </div>
-  );
-
-  if (!isAuthenticated) return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-900 p-6">
-      <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
-        <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Lock className="text-red-800" size={32} />
-        </div>
-        <h2 className="text-2xl font-bold text-stone-800 mb-2">Đạo Tràng "Xóa Điếc"</h2>
-        <p className="text-stone-500 mb-8 text-sm">Nhập mật khẩu để vào bên trong</p>
-        <input 
-          type="password" 
-          value={passInput}
-          onChange={(e) => setPassInput(e.target.value)}
-          placeholder="Mật khẩu..."
-          className="w-full px-4 py-3 rounded-lg border-2 border-stone-200 mb-4 focus:border-red-800 outline-none transition-all"
-        />
-        <button type="submit" className="w-full bg-red-800 text-white py-3 rounded-lg font-bold hover:bg-red-900 transition-colors">
-          Khám Phá
-        </button>
-      </form>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 pb-20 font-serif">
-      {/* Header */}
-      <header className="bg-red-900 text-amber-50 py-10 px-6 text-center shadow-lg border-b-4 border-amber-500">
-        <h1 className="text-3xl md:text-5xl font-black mb-2 uppercase tracking-tighter">HÀNH TRÌNH 60 NGÀY</h1>
-        <p className="opacity-70 text-sm md:text-base italic tracking-widest uppercase">Khai Mở Tâm Thức - Chặt Đứt Vòng Luân Hồi</p>
-      </header>
-
-      {/* Navigation */}
-      <div className="sticky top-0 z-40 bg-white shadow-sm border-b overflow-x-auto flex no-scrollbar whitespace-nowrap">
-        {[
-            { id: 'leaderboard', icon: <Trophy size={18}/>, label: 'Bảng Vàng' },
-            { id: 'personal', icon: <Flame size={18}/>, label: 'Tu Tập' },
-            { id: 'atomic', icon: <Zap size={18}/>, label: 'Thói Quen' },
-            { id: 'challenges', icon: <Target size={18}/>, label: 'Thử Thách' },
-            { id: 'learning', icon: <BookOpen size={18}/>, label: 'Giáo Pháp' },
-        ].map(tab => (
-            <button
-                key={tab.id}
-                onClick={() => { setViewMode(tab.id); setActiveLesson(null); }}
-                className={`px-6 py-4 flex items-center gap-2 font-bold text-xs uppercase tracking-widest transition-all ${viewMode === tab.id ? 'text-red-800 border-b-4 border-red-800 bg-red-50' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-                {tab.icon} {tab.label}
-            </button>
-        ))}
-      </div>
-
-      <main className="max-w-6xl mx-auto px-4 mt-8">
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Roboto:wght@300;400;700&display=swap');
         
-        {/* LEADERBOARD VIEW */}
-        {viewMode === 'leaderboard' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-stone-200">
-                    <div className="bg-amber-500 p-6 text-white flex justify-between items-center">
-                        <h2 className="text-2xl font-bold flex items-center gap-2">BẢNG VÀNG CÔNG ĐỨC</h2>
-                        <Star className="animate-pulse" />
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-stone-100 text-[10px] uppercase font-bold text-stone-500 tracking-widest">
-                                <tr>
-                                    <th className="px-6 py-4">Hạng</th>
-                                    <th className="px-6 py-4">Pháp Hữu</th>
-                                    <th className="px-6 py-4 text-center">Tu Tập (x10)</th>
-                                    <th className="px-6 py-4 text-center">Thói Quen (x2)</th>
-                                    <th className="px-6 py-4 text-center">Thử Thách (x50)</th>
-                                    <th className="px-6 py-4 text-right">Tổng Điểm</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-stone-100">
-                                {leaderBoard.map((item, i) => (
-                                    <tr key={item.idx} className={`hover:bg-amber-50 transition-colors ${i === 0 ? 'bg-amber-50/30' : ''}`}>
-                                        <td className="px-6 py-4">
-                                            {i === 0 ? <Medal className="text-amber-500" /> : 
-                                             i === 1 ? <Medal className="text-stone-400" /> :
-                                             i === 2 ? <Medal className="text-amber-700" /> : 
-                                             <span className="font-sans text-stone-400 font-bold ml-1">{i + 1}</span>}
-                                        </td>
-                                        <td className="px-6 py-4 font-bold text-stone-800">{item.name}</td>
-                                        <td className="px-6 py-4 text-center font-sans">{item.totalDaily}</td>
-                                        <td className="px-6 py-4 text-center font-sans">{item.totalAtomic}</td>
-                                        <td className="px-6 py-4 text-center font-sans">{item.totalChallenge}</td>
-                                        <td className="px-6 py-4 text-right font-black text-red-800 font-sans">{item.score.toLocaleString()}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        )}
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Custom animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-stone-50">
+    <div id="root"></div>
 
-        {/* PERSONAL/ATOMIC VIEW */}
-        {(viewMode === 'personal' || viewMode === 'atomic') && (
-            <div className="animate-in fade-in duration-300">
-                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+
+        // Cấu hình Firebase của bạn
+        const firebaseConfig = {
+            apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
+            authDomain: "day-challenge-39df2.firebaseapp.com",
+            projectId: "day-challenge-39df2",
+            storageBucket: "day-challenge-39df2.firebasestorage.app",
+            messagingSenderId: "1083656610996",
+            appId: "1:1083656610996:web:67780223432a21866323e1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = "sixty-day-challenge-v1";
+
+        // Export to window for React to use
+        window.firebaseTools = { auth, db, appId, doc, setDoc, onSnapshot, collection, query, signInAnonymously, onAuthStateChanged };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { 
+            CheckCircle2, Circle, Sun, Moon, Sunrise, Flame, User, Calendar,
+            Users, Trophy, Loader2, Lock, BookOpen, Zap, Target,
+            ChevronLeft, ChevronRight, ArrowLeft, Medal, Star 
+        } = lucide;
+
+        // Custom Hook to wrap Lucide icons for React
+        const Icon = ({ name: IconComp, ...props }) => {
+            return <IconComp {...props} />;
+        };
+
+        const App = () => {
+            const { auth, db, appId, doc, setDoc, onSnapshot, collection, query, signInAnonymously, onAuthStateChanged } = window.firebaseTools || {};
+            
+            const TOTAL_DAYS = 60;
+            const START_DATE = new Date('2026-01-23'); 
+            const PASSWORD = "elephan";
+
+            const MEMBERS = ["Bảo Bình", "Bình Minh", "Phượng", "Phương", "Trang", "Điện", "Ánh Dương", "Thanh Thảo", "Linh", "Quân", "Hằng"];
+
+            const DAILY_TASKS = [
+                { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện' },
+                { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy' },
+                { id: 'khau_hanh', label: '4 Giới & 4 Thiện hạnh về Khẩu' },
+                { id: 'am_thanh', label: 'Giải phóng cơ thể & Âm thanh' },
+                { id: 'tri_chu', label: 'Nghi quỹ 3Kaya & Cúng Hộ Pháp' },
+                { id: 'thien_quan', label: 'Thiền 10p & Quán Đức Phổ Hiền' }
+            ];
+
+            const ATOMIC_TASKS = [
+                { id: 'at_rang', label: 'Đánh răng' },
+                { id: 'at_mat', label: 'Rửa mặt' },
+                { id: 'at_bo', label: 'Đi bộ' },
+                { id: 'at_toc', label: 'Chải tóc' },
+                { id: 'at_an', label: 'Ăn' },
+                { id: 'at_uong', label: 'Uống' },
+                { id: 'at_ao', label: 'Mặc quần áo' }
+            ];
+
+            const CHALLENGES = [
+                { id: 'ch_ngu', label: 'Ngày ngủ 4 tiếng' },
+                { id: 'ch_chay', label: 'Ăn đồ ăn chay' },
+                { id: 'ch_thit', label: 'Không ăn thịt' },
+                { id: 'ch_thoi', label: 'Ngày 6 thời khóa' }
+            ];
+
+            const MICRO_LEARNING = [
+                { id: 'quy_y', title: 'Quy y', content: 'Quy y là đặt niềm tin trọn vẹn vào Tam Bảo: Phật, Pháp, Tăng. Đây là cánh cửa đầu tiên để bước vào con đường giác ngộ.' },
+                { id: 'luc_do', title: 'Lục độ ba la mật', content: 'Sáu hạnh của Bồ tát: Bố thí, Trì giới, Nhẫn nhục, Tinh tấn, Thiền định, Trí tuệ.' },
+                { id: 'ngoai_mat', title: 'Ngoại mật', content: 'Các pháp tu tập hướng về hình thức bên ngoài, tịnh hóa thân và môi trường xung quanh.' },
+                { id: 'noi_mat', title: 'Nội mật', content: 'Các pháp tu tập sâu vào tâm thức, khí, mạch và minh điểm bên trong cơ thể.' }
+            ];
+
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [passInput, setPassInput] = useState("");
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [selectedMember, setSelectedMember] = useState(0);
+            const [viewDay, setViewDay] = useState(1);
+            const [todayNum, setTodayNum] = useState(1);
+            const [data, setData] = useState({}); 
+            const [viewMode, setViewMode] = useState('leaderboard'); 
+            const [activeLesson, setActiveLesson] = useState(null);
+
+            useEffect(() => {
+                if (!auth) return;
+                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                    if (u) {
+                        setUser(u);
+                        setLoading(false);
+                    } else {
+                        signInAnonymously(auth);
+                    }
+                });
+                return () => unsubscribe();
+            }, [auth]);
+
+            useEffect(() => {
+                if (!user || !db) return;
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'v2_challenges'));
+                return onSnapshot(q, (snapshot) => {
+                    const newData = {};
+                    snapshot.forEach((doc) => { newData[doc.id] = doc.data(); });
+                    setData(newData);
+                });
+            }, [user, db]);
+
+            useEffect(() => {
+                const diff = Math.floor((new Date().getTime() - START_DATE.getTime()) / (1000 * 3600 * 24)) + 1;
+                const current = Math.max(1, Math.min(diff, TOTAL_DAYS));
+                setTodayNum(current);
+                setViewDay(current);
+            }, []);
+
+            const updateStore = async (memberIdx, field, subKey, taskId, value) => {
+                if (!user || !db) return;
+                const memberDoc = data[memberIdx] || { days: {}, atomic: {}, longTerm: {} };
                 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
-                    <div className="lg:col-span-2">
-                        <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-xl shadow-sm border">
-                            <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-2 hover:bg-stone-100 rounded-full transition-colors"><ChevronLeft/></button>
-                            <span className="font-bold text-lg">Ngày {viewDay}</span>
-                            <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-2 hover:bg-stone-100 rounded-full transition-colors" disabled={viewDay >= todayNum}><ChevronRight/></button>
-                        </div>
-                        
-                        <div className="grid grid-cols-6 sm:grid-cols-10 gap-2 p-4 bg-white rounded-xl shadow-sm border">
-                            {[...Array(TOTAL_DAYS)].map((_, i) => {
-                                const dNum = i + 1;
-                                const isCompleted = viewMode === 'personal' 
-                                    ? Object.values(data[selectedMember]?.days?.[dNum] || {}).filter(v => v).length === DAILY_TASKS.length
-                                    : Object.values(data[selectedMember]?.atomic?.[dNum] || {}).filter(v => v).length === ATOMIC_TASKS.length;
+                let updated;
+                if (field === 'days' || field === 'atomic') {
+                    const currentField = memberDoc[field] || {};
+                    const currentDay = currentField[subKey] || {};
+                    updated = { ...currentField, [subKey]: { ...currentDay, [taskId]: value } };
+                } else {
+                    const currentField = memberDoc[field] || {};
+                    updated = { ...currentField, [taskId]: value };
+                }
 
-                                return (
-                                    <button
-                                        key={i}
-                                        onClick={() => setViewDay(dNum)}
-                                        disabled={dNum > todayNum}
-                                        className={`aspect-square rounded text-[10px] font-bold border transition-all ${
-                                            viewDay === dNum ? 'ring-2 ring-red-800 scale-110 z-10' : ''
-                                        } ${dNum > todayNum ? 'opacity-20 cursor-not-allowed' : 
-                                            isCompleted ? 'bg-amber-500 text-white border-amber-600' : 'bg-stone-50 text-stone-400 border-stone-200'}`}
-                                    >
-                                        {dNum}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'v2_challenges', memberIdx.toString()), { 
+                        [field]: updated 
+                    }, { merge: true });
+                } catch (err) { console.error(err); }
+            };
 
-                    <div className="bg-stone-800 text-stone-100 p-6 rounded-2xl shadow-xl h-fit border-t-4 border-amber-500">
-                        <h3 className="text-xl font-bold mb-6 text-amber-400 flex items-center gap-2">
-                            {viewMode === 'personal' ? <Flame size={20}/> : <Zap size={20}/>}
-                            {viewMode === 'personal' ? 'Khóa Lễ Ngày' : 'Thói Quen Nhỏ'}
-                        </h3>
-                        
-                        <div className="space-y-4">
-                            {(viewMode === 'personal' ? DAILY_TASKS : ATOMIC_TASKS).map(task => (
-                                <TaskItem 
-                                    key={task.id}
-                                    label={task.label}
-                                    isChecked={data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]}
-                                    onToggle={() => updateStore(
-                                        selectedMember, 
-                                        viewMode === 'personal' ? 'days' : 'atomic', 
-                                        viewDay, 
-                                        task.id, 
-                                        !data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]
-                                    )}
-                                />
-                            ))}
-                        </div>
-                    </div>
+            const leaderBoard = useMemo(() => {
+                return MEMBERS.map((name, idx) => {
+                    const mData = data[idx] || {};
+                    let totalDaily = 0;
+                    let totalAtomic = 0;
+                    let totalChallenge = 0;
+                    Object.values(mData.days || {}).forEach(day => { totalDaily += Object.values(day).filter(v => v).length; });
+                    Object.values(mData.atomic || {}).forEach(day => { totalAtomic += Object.values(day).filter(v => v).length; });
+                    totalChallenge = Object.values(mData.longTerm || {}).filter(v => v).length;
+                    const score = (totalDaily * 10) + (totalAtomic * 2) + (totalChallenge * 50);
+                    return { name, idx, totalDaily, totalAtomic, totalChallenge, score };
+                }).sort((a, b) => b.score - a.score);
+            }, [data]);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (passInput.toLowerCase() === PASSWORD) setIsAuthenticated(true);
+                else alert("Mật khẩu không đúng!");
+            };
+
+            if (loading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-stone-100">
+                    <Loader2 className="animate-spin text-red-800 mb-4" size={48} />
+                    <p className="text-stone-500 font-bold tracking-widest animate-pulse uppercase text-xs">Đang kết nối tâm thức...</p>
                 </div>
-            </div>
-        )}
+            );
 
-        {/* CHALLENGES VIEW */}
-        {viewMode === 'challenges' && (
-            <div className="animate-in fade-in duration-300">
-                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
-                <div className="mt-8 max-w-2xl mx-auto">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl border-2 border-stone-100">
-                        <div className="text-center mb-8">
-                            <Target className="mx-auto text-red-800 mb-4" size={40} />
-                            <h3 className="text-2xl font-bold">Thử Thách Vô Thường</h3>
-                            <p className="text-stone-500 text-sm mt-2 italic">Những mục tiêu kiên định cần đạt được trong suốt 60 ngày</p>
+            if (!isAuthenticated) return (
+                <div className="min-h-screen flex items-center justify-center bg-stone-900 p-6">
+                    <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border-t-8 border-red-800">
+                        <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Lock className="text-red-800" size={36} />
                         </div>
-                        <div className="space-y-4">
-                            {CHALLENGES.map(ch => (
-                                <button
-                                    key={ch.id}
-                                    onClick={() => updateStore(selectedMember, 'longTerm', null, ch.id, !data[selectedMember]?.longTerm?.[ch.id])}
-                                    className={`w-full p-5 rounded-xl flex items-center gap-4 border-2 transition-all ${
-                                        data[selectedMember]?.longTerm?.[ch.id] 
-                                        ? 'bg-amber-50 border-amber-500 text-amber-900' 
-                                        : 'bg-stone-50 border-stone-100 text-stone-500 hover:border-stone-200'
-                                    }`}
-                                >
-                                    {data[selectedMember]?.longTerm?.[ch.id] ? <CheckCircle2 className="text-amber-500" /> : <Circle className="opacity-30" />}
-                                    <span className="font-bold text-lg">{ch.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                        <h2 className="text-3xl font-black text-stone-800 mb-2 font-serif">ĐẠO TRÀNG XÓA ĐIẾC</h2>
+                        <p className="text-stone-500 mb-8 text-sm italic">"Hãy để lòng kiên định dẫn lối bạn qua 60 ngày thử thách"</p>
+                        <input 
+                            type="password" 
+                            value={passInput}
+                            onChange={(e) => setPassInput(e.target.value)}
+                            placeholder="Nhập mật khẩu truy cập..."
+                            className="w-full px-5 py-4 rounded-xl border-2 border-stone-100 mb-6 focus:border-red-800 focus:ring-4 focus:ring-red-50 outline-none transition-all text-center text-xl tracking-widest"
+                        />
+                        <button type="submit" className="w-full bg-red-800 text-white py-4 rounded-xl font-bold hover:bg-red-900 transition-all shadow-lg hover:shadow-red-200 active:scale-95">
+                            BẮT ĐẦU TU TẬP
+                        </button>
+                    </form>
                 </div>
-            </div>
-        )}
+            );
 
-        {/* MICRO LEARNING VIEW */}
-        {viewMode === 'learning' && (
-            <div className="animate-in fade-in duration-300">
-                {!activeLesson ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {MICRO_LEARNING.map(lesson => (
+            return (
+                <div className="min-h-screen bg-stone-50 text-stone-900 pb-20 font-sans">
+                    <header className="bg-red-900 text-amber-50 py-12 px-6 text-center shadow-lg border-b-8 border-amber-500 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
+                        <h1 className="text-4xl md:text-6xl font-black mb-3 uppercase tracking-tighter font-serif">HÀNH TRÌNH 60 NGÀY</h1>
+                        <p className="opacity-70 text-sm md:text-lg italic tracking-[0.2em] uppercase font-light">Khai Mở Tâm Thức - Chặt Đứt Vòng Luân Hồi</p>
+                    </header>
+
+                    <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-md border-b flex overflow-x-auto no-scrollbar whitespace-nowrap px-4 justify-center">
+                        {[
+                            { id: 'leaderboard', icon: Trophy, label: 'Bảng Vàng' },
+                            { id: 'personal', icon: Flame, label: 'Tu Tập' },
+                            { id: 'atomic', icon: Zap, label: 'Thói Quen' },
+                            { id: 'challenges', icon: Target, label: 'Thử Thách' },
+                            { id: 'learning', icon: BookOpen, label: 'Giáo Pháp' },
+                        ].map(tab => (
                             <button
-                                key={lesson.id}
-                                onClick={() => setActiveLesson(lesson)}
-                                className="bg-white p-8 rounded-2xl shadow-sm border-2 border-transparent hover:border-red-800 hover:shadow-xl transition-all text-left group"
+                                key={tab.id}
+                                onClick={() => { setViewMode(tab.id); setActiveLesson(null); }}
+                                className={`px-6 py-5 flex items-center gap-2 font-bold text-xs uppercase tracking-widest transition-all relative ${viewMode === tab.id ? 'text-red-800' : 'text-stone-400 hover:text-stone-600'}`}
                             >
-                                <div className="bg-red-50 text-red-800 w-12 h-12 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                    <BookOpen size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold mb-2">{lesson.title}</h3>
-                                <p className="text-stone-500 text-sm line-clamp-2">Tìm hiểu về bản chất và cách thực hành {lesson.title.toLowerCase()}.</p>
-                                <div className="mt-6 flex items-center text-red-800 font-bold text-xs uppercase tracking-widest gap-2">
-                                    Xem chi tiết <ChevronRight size={14} />
-                                </div>
+                                <Icon name={tab.icon} size={18} /> {tab.label}
+                                {viewMode === tab.id && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-800 rounded-t-full"></div>}
                             </button>
                         ))}
-                    </div>
-                ) : (
-                    <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl border animate-in zoom-in-95 duration-300">
-                        <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-stone-400 hover:text-red-800 mb-8 font-bold transition-colors">
-                            <ArrowLeft size={18} /> QUAY LẠI DANH SÁCH
-                        </button>
-                        <h2 className="text-4xl font-black mb-8 border-b-4 border-amber-500 pb-4 inline-block">{activeLesson.title}</h2>
-                        <div className="prose prose-stone max-w-none text-lg leading-relaxed text-stone-700 whitespace-pre-wrap">
-                            {activeLesson.content}
-                        </div>
-                        <div className="mt-12 p-6 bg-stone-50 rounded-xl border border-stone-200 italic text-stone-500">
-                            "Tri thức không đi đôi với thực hành giống như người mù cầm đèn pin soi đường cho kẻ khác."
-                        </div>
-                    </div>
-                )}
+                    </nav>
+
+                    <main className="max-w-6xl mx-auto px-4 mt-10">
+                        {viewMode === 'leaderboard' && (
+                            <div className="animate-in">
+                                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-stone-100">
+                                    <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-8 text-white flex justify-between items-center">
+                                        <div>
+                                            <h2 className="text-3xl font-black flex items-center gap-3 font-serif uppercase tracking-tight">Bảng Vàng Công Đức</h2>
+                                            <p className="text-amber-100 text-sm mt-1">Ghi nhận sự tinh tấn của các hành giả</p>
+                                        </div>
+                                        <Star className="animate-pulse hidden md:block" size={40} />
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-stone-50 text-[11px] uppercase font-bold text-stone-400 tracking-widest border-b">
+                                                <tr>
+                                                    <th className="px-8 py-5">Hạng</th>
+                                                    <th className="px-8 py-5">Pháp Hữu</th>
+                                                    <th className="px-8 py-5 text-center">Tu Tập</th>
+                                                    <th className="px-8 py-5 text-center">Thói Quen</th>
+                                                    <th className="px-8 py-5 text-center">Thử Thách</th>
+                                                    <th className="px-8 py-5 text-right">Tổng Điểm</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-stone-100">
+                                                {leaderBoard.map((item, i) => (
+                                                    <tr key={item.idx} className={`hover:bg-amber-50/50 transition-colors ${i < 3 ? 'bg-amber-50/20' : ''}`}>
+                                                        <td className="px-8 py-6">
+                                                            {i === 0 ? <Medal className="text-amber-500" size={28} /> : 
+                                                             i === 1 ? <Medal className="text-stone-400" size={28} /> :
+                                                             i === 2 ? <Medal className="text-amber-700" size={28} /> : 
+                                                             <span className="font-bold text-stone-300 ml-2 text-lg">{i + 1}</span>}
+                                                        </td>
+                                                        <td className="px-8 py-6">
+                                                            <div className="font-bold text-stone-800 text-lg">{item.name}</div>
+                                                            {i === 0 && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">Thủ khoa tinh tấn</span>}
+                                                        </td>
+                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalDaily}</td>
+                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalAtomic}</td>
+                                                        <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalChallenge}</td>
+                                                        <td className="px-8 py-6 text-right font-black text-red-800 text-xl tracking-tighter">{item.score.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {(viewMode === 'personal' || viewMode === 'atomic') && (
+                            <div className="animate-in">
+                                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10">
+                                    <div className="lg:col-span-2">
+                                        <div className="flex items-center justify-between mb-6 bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
+                                            <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200"><ChevronLeft/></button>
+                                            <div className="text-center">
+                                                <span className="block text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-1">Tiến trình hiện tại</span>
+                                                <span className="font-black text-2xl font-serif">Ngày {viewDay} / 60</span>
+                                            </div>
+                                            <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200" disabled={viewDay >= todayNum}><ChevronRight/></button>
+                                        </div>
+                                        <div className="grid grid-cols-6 sm:grid-cols-10 gap-3 p-6 bg-white rounded-3xl shadow-sm border border-stone-100">
+                                            {[...Array(TOTAL_DAYS)].map((_, i) => {
+                                                const dNum = i + 1;
+                                                const isCompleted = viewMode === 'personal' 
+                                                    ? Object.values(data[selectedMember]?.days?.[dNum] || {}).filter(v => v).length === DAILY_TASKS.length
+                                                    : Object.values(data[selectedMember]?.atomic?.[dNum] || {}).filter(v => v).length === ATOMIC_TASKS.length;
+                                                return (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setViewDay(dNum)}
+                                                        disabled={dNum > todayNum}
+                                                        className={`aspect-square rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center ${
+                                                            viewDay === dNum ? 'border-red-800 bg-red-50 text-red-800 ring-4 ring-red-50 scale-105 z-10 shadow-lg' : 
+                                                            dNum > todayNum ? 'opacity-20 cursor-not-allowed bg-stone-50' : 
+                                                            isCompleted ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white text-stone-300 border-stone-100'
+                                                        }`}
+                                                    >
+                                                        {dNum}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="bg-stone-900 text-stone-100 p-8 rounded-3xl shadow-2xl h-fit border-t-8 border-amber-500">
+                                        <h3 className="text-2xl font-black mb-8 text-amber-400 flex items-center gap-3 font-serif">
+                                            <Icon name={viewMode === 'personal' ? Flame : Zap} size={28}/>
+                                            {viewMode === 'personal' ? 'KHÓA LỄ NGÀY' : 'THÓI QUEN NHỎ'}
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {(viewMode === 'personal' ? DAILY_TASKS : ATOMIC_TASKS).map(task => (
+                                                <TaskItem 
+                                                    key={task.id}
+                                                    label={task.label}
+                                                    isChecked={data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]}
+                                                    onToggle={() => updateStore(
+                                                        selectedMember, 
+                                                        viewMode === 'personal' ? 'days' : 'atomic', 
+                                                        viewDay, 
+                                                        task.id, 
+                                                        !data[selectedMember]?.[viewMode === 'personal' ? 'days' : 'atomic']?.[viewDay]?.[task.id]
+                                                    )}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {viewMode === 'challenges' && (
+                            <div className="animate-in max-w-2xl mx-auto">
+                                <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
+                                <div className="mt-10 bg-white p-10 rounded-3xl shadow-2xl border-2 border-stone-50 text-center">
+                                    <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <Target className="text-red-800" size={40} />
+                                    </div>
+                                    <h3 className="text-3xl font-black font-serif mb-2">THỬ THÁCH VÔ THƯỜNG</h3>
+                                    <p className="text-stone-400 italic mb-10">"Sự kiên trì là nền tảng của mọi thành tựu tâm linh"</p>
+                                    <div className="space-y-4 text-left">
+                                        {CHALLENGES.map(ch => (
+                                            <button
+                                                key={ch.id}
+                                                onClick={() => updateStore(selectedMember, 'longTerm', null, ch.id, !data[selectedMember]?.longTerm?.[ch.id])}
+                                                className={`w-full p-6 rounded-2xl flex items-center gap-5 border-2 transition-all ${
+                                                    data[selectedMember]?.longTerm?.[ch.id] 
+                                                    ? 'bg-amber-50 border-amber-500 text-amber-900 shadow-inner' 
+                                                    : 'bg-stone-50 border-stone-100 text-stone-500 hover:border-stone-200'
+                                                }`}
+                                            >
+                                                {data[selectedMember]?.longTerm?.[ch.id] ? <CheckCircle2 className="text-amber-500" size={24} /> : <Circle className="opacity-20" size={24} />}
+                                                <span className="font-bold text-xl">{ch.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {viewMode === 'learning' && (
+                            <div className="animate-in">
+                                {!activeLesson ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        {MICRO_LEARNING.map(lesson => (
+                                            <button
+                                                key={lesson.id}
+                                                onClick={() => setActiveLesson(lesson)}
+                                                className="bg-white p-10 rounded-3xl shadow-sm border-2 border-transparent hover:border-red-800 hover:shadow-2xl transition-all text-left group flex flex-col h-full"
+                                            >
+                                                <div className="bg-red-50 text-red-800 w-16 h-16 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-red-800 group-hover:text-white transition-all">
+                                                    <BookOpen size={32} />
+                                                </div>
+                                                <h3 className="text-2xl font-black mb-4 font-serif">{lesson.title}</h3>
+                                                <p className="text-stone-400 text-sm flex-grow italic leading-relaxed">Khám phá các khía cạnh thâm sâu của {lesson.title.toLowerCase()} và ứng dụng vào hành trình tu tập.</p>
+                                                <div className="mt-10 flex items-center text-red-800 font-bold text-xs uppercase tracking-[0.2em] gap-2">
+                                                    CHI TIẾT GIÁO PHÁP <ChevronRight size={14} />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="bg-white p-8 md:p-16 rounded-3xl shadow-2xl border border-stone-100 animate-in">
+                                        <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-stone-400 hover:text-red-800 mb-10 font-bold transition-colors uppercase tracking-widest text-xs">
+                                            <ArrowLeft size={16} /> TRỞ LẠI THƯ VIỆN
+                                        </button>
+                                        <h2 className="text-5xl font-black mb-10 border-b-8 border-amber-500 pb-6 inline-block font-serif text-stone-800">{activeLesson.title}</h2>
+                                        <div className="text-xl leading-relaxed text-stone-600 whitespace-pre-wrap font-light first-letter:text-5xl first-letter:font-bold first-letter:text-red-800 first-letter:mr-3 first-letter:float-left">
+                                            {activeLesson.content}
+                                        </div>
+                                        <div className="mt-16 p-8 bg-stone-50 rounded-2xl border-l-8 border-red-800 italic text-stone-500 text-lg shadow-inner">
+                                            "Pháp vốn không có ngôn từ, nhưng nhờ ngôn từ mà ta nhận ra chân lý."
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="mt-32 py-16 border-t border-stone-200 text-center opacity-40 text-[10px] tracking-[0.5em] uppercase font-bold text-stone-400 px-6 leading-loose">
+                        Nguyện đem công đức này &bull; Hướng về khắp tất cả &bull; Đệ tử và chúng sinh &bull; Đều trọn thành Phật đạo
+                    </footer>
+                </div>
+            );
+        };
+
+        const MemberSelector = ({ members, selected, onSelect }) => (
+            <div className="bg-white p-3 rounded-2xl shadow-sm border border-stone-100 flex gap-2 overflow-x-auto no-scrollbar mb-4">
+                {members.map((m, i) => (
+                    <button
+                        key={i}
+                        onClick={() => onSelect(i)}
+                        className={`px-6 py-3 rounded-xl whitespace-nowrap text-xs font-bold transition-all uppercase tracking-widest ${
+                            selected === i ? 'bg-red-800 text-white shadow-lg scale-105' : 'text-stone-400 hover:bg-stone-50'
+                        }`}
+                    >
+                        {m}
+                    </button>
+                ))}
             </div>
-        )}
+        );
 
-      </main>
-
-      <footer className="mt-20 py-10 border-t border-stone-200 text-center opacity-30 text-[10px] tracking-[0.4em] uppercase">
-        Nguyện đem công đức này &bull; Hướng về khắp tất cả &bull; Đệ tử và chúng sinh &bull; Đều trọn thành Phật đạo
-      </footer>
-    </div>
-  );
-};
-
-const MemberSelector = ({ members, selected, onSelect }) => (
-    <div className="bg-white p-2 rounded-2xl shadow-sm border flex gap-1 overflow-x-auto no-scrollbar">
-        {members.map((m, i) => (
+        const TaskItem = ({ label, isChecked, onToggle }) => (
             <button
-                key={i}
-                onClick={() => onSelect(i)}
-                className={`px-5 py-2.5 rounded-xl whitespace-nowrap text-xs font-bold transition-all ${
-                    selected === i ? 'bg-red-800 text-white shadow-lg' : 'text-stone-500 hover:bg-stone-50'
+                onClick={onToggle}
+                className={`w-full flex items-start gap-4 p-5 rounded-2xl transition-all border-2 text-left group ${
+                    isChecked ? 'bg-amber-600/20 border-amber-500/30 text-amber-100' : 'bg-stone-800/50 border-stone-700/50 text-stone-400 hover:bg-stone-800 hover:border-stone-600'
                 }`}
             >
-                {m}
+                <div className="mt-1 transition-transform group-active:scale-90">
+                    {isChecked ? <CheckCircle2 className="text-amber-500" size={22} /> : <Circle size={22} className="opacity-20" />}
+                </div>
+                <span className="text-base font-bold leading-tight">{label}</span>
             </button>
-        ))}
-    </div>
-);
+        );
 
-const TaskItem = ({ label, isChecked, onToggle }) => (
-    <button
-        onClick={onToggle}
-        className={`w-full flex items-start gap-3 p-3.5 rounded-xl transition-all border text-left ${
-            isChecked ? 'bg-amber-600/20 border-amber-500/30 text-amber-100' : 'bg-stone-700/40 border-transparent text-stone-400 hover:bg-stone-700'
-        }`}
-    >
-        <div className="mt-0.5">
-            {isChecked ? <CheckCircle2 className="text-amber-500" size={18} /> : <Circle size={18} className="opacity-20" />}
-        </div>
-        <span className="text-sm font-medium leading-snug">{label}</span>
-    </button>
-);
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
