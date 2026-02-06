@@ -15,7 +15,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Lucide Icons -->
+    <!-- Lucide Icons (UMD) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
@@ -34,7 +34,6 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
-        /* Custom animations */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -53,7 +52,6 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 
-        // Cấu hình Firebase của bạn
         const firebaseConfig = {
             apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
             authDomain: "day-challenge-39df2.firebaseapp.com",
@@ -68,32 +66,59 @@
         const db = getFirestore(app);
         const appId = "sixty-day-challenge-v1";
 
-        // Export to window for React to use
         window.firebaseTools = { auth, db, appId, doc, setDoc, onSnapshot, collection, query, signInAnonymously, onAuthStateChanged };
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { 
-            CheckCircle2, Circle, Sun, Moon, Sunrise, Flame, User, Calendar,
-            Users, Trophy, Loader2, Lock, BookOpen, Zap, Target,
-            ChevronLeft, ChevronRight, ArrowLeft, Medal, Star 
-        } = lucide;
+        const { useState, useEffect, useMemo, createElement } = React;
 
-        // Custom Hook to wrap Lucide icons for React
-        const Icon = ({ name: IconComp, ...props }) => {
-            return <IconComp {...props} />;
+        // Xử lý Lucide Icons trong môi trường trình duyệt
+        // Lucide khi dùng script tag sẽ phơi ra đối tượng `lucide` toàn cục
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const iconData = lucide.icons[name];
+            if (!iconData) return null;
+            
+            // Chuyển đổi cấu trúc dữ liệu của Lucide sang React elements
+            return (
+                <svg
+                    width={size}
+                    height={size}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={className}
+                    dangerouslySetInnerHTML={{
+                        __html: iconData[1].map(tag => {
+                            const [tagName, attrs] = tag;
+                            const attrStr = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
+                            return `<${tagName} ${attrStr} />`;
+                        }).join('')
+                    }}
+                />
+            );
         };
 
         const App = () => {
-            const { auth, db, appId, doc, setDoc, onSnapshot, collection, query, signInAnonymously, onAuthStateChanged } = window.firebaseTools || {};
-            
+            const [fb, setFb] = useState(null);
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [passInput, setPassInput] = useState("");
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [selectedMember, setSelectedMember] = useState(0);
+            const [viewDay, setViewDay] = useState(1);
+            const [todayNum, setTodayNum] = useState(1);
+            const [data, setData] = useState({}); 
+            const [viewMode, setViewMode] = useState('leaderboard'); 
+            const [activeLesson, setActiveLesson] = useState(null);
+
             const TOTAL_DAYS = 60;
             const START_DATE = new Date('2026-01-23'); 
             const PASSWORD = "elephan";
-
             const MEMBERS = ["Bảo Bình", "Bình Minh", "Phượng", "Phương", "Trang", "Điện", "Ánh Dương", "Thanh Thảo", "Linh", "Quân", "Hằng"];
-
+            
             const DAILY_TASKS = [
                 { id: 'tinh_hoa', label: 'Tịnh hóa Thân - Khẩu - Ý & Cầu Nguyện' },
                 { id: 'cung_khoi', label: 'Cúng khói & Lễ lạy' },
@@ -127,39 +152,38 @@
                 { id: 'noi_mat', title: 'Nội mật', content: 'Các pháp tu tập sâu vào tâm thức, khí, mạch và minh điểm bên trong cơ thể.' }
             ];
 
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [passInput, setPassInput] = useState("");
-            const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [selectedMember, setSelectedMember] = useState(0);
-            const [viewDay, setViewDay] = useState(1);
-            const [todayNum, setTodayNum] = useState(1);
-            const [data, setData] = useState({}); 
-            const [viewMode, setViewMode] = useState('leaderboard'); 
-            const [activeLesson, setActiveLesson] = useState(null);
+            useEffect(() => {
+                const checkFb = setInterval(() => {
+                    if (window.firebaseTools) {
+                        setFb(window.firebaseTools);
+                        clearInterval(checkFb);
+                    }
+                }, 100);
+                return () => clearInterval(checkFb);
+            }, []);
 
             useEffect(() => {
-                if (!auth) return;
-                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                if (!fb) return;
+                const unsubscribe = fb.onAuthStateChanged(fb.auth, (u) => {
                     if (u) {
                         setUser(u);
                         setLoading(false);
                     } else {
-                        signInAnonymously(auth);
+                        fb.signInAnonymously(fb.auth);
                     }
                 });
                 return () => unsubscribe();
-            }, [auth]);
+            }, [fb]);
 
             useEffect(() => {
-                if (!user || !db) return;
-                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'v2_challenges'));
-                return onSnapshot(q, (snapshot) => {
+                if (!user || !fb) return;
+                const q = fb.query(fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'v2_challenges'));
+                return fb.onSnapshot(q, (snapshot) => {
                     const newData = {};
                     snapshot.forEach((doc) => { newData[doc.id] = doc.data(); });
                     setData(newData);
                 });
-            }, [user, db]);
+            }, [user, fb]);
 
             useEffect(() => {
                 const diff = Math.floor((new Date().getTime() - START_DATE.getTime()) / (1000 * 3600 * 24)) + 1;
@@ -169,9 +193,8 @@
             }, []);
 
             const updateStore = async (memberIdx, field, subKey, taskId, value) => {
-                if (!user || !db) return;
+                if (!user || !fb) return;
                 const memberDoc = data[memberIdx] || { days: {}, atomic: {}, longTerm: {} };
-                
                 let updated;
                 if (field === 'days' || field === 'atomic') {
                     const currentField = memberDoc[field] || {};
@@ -181,9 +204,8 @@
                     const currentField = memberDoc[field] || {};
                     updated = { ...currentField, [taskId]: value };
                 }
-
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'v2_challenges', memberIdx.toString()), { 
+                    await fb.setDoc(fb.doc(fb.db, 'artifacts', fb.appId, 'public', 'data', 'v2_challenges', memberIdx.toString()), { 
                         [field]: updated 
                     }, { merge: true });
                 } catch (err) { console.error(err); }
@@ -211,7 +233,7 @@
 
             if (loading) return (
                 <div className="min-h-screen flex flex-col items-center justify-center bg-stone-100">
-                    <Loader2 className="animate-spin text-red-800 mb-4" size={48} />
+                    <Icon name="Loader2" className="animate-spin text-red-800 mb-4" size={48} />
                     <p className="text-stone-500 font-bold tracking-widest animate-pulse uppercase text-xs">Đang kết nối tâm thức...</p>
                 </div>
             );
@@ -220,7 +242,7 @@
                 <div className="min-h-screen flex items-center justify-center bg-stone-900 p-6">
                     <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border-t-8 border-red-800">
                         <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Lock className="text-red-800" size={36} />
+                            <Icon name="Lock" className="text-red-800" size={36} />
                         </div>
                         <h2 className="text-3xl font-black text-stone-800 mb-2 font-serif">ĐẠO TRÀNG XÓA ĐIẾC</h2>
                         <p className="text-stone-500 mb-8 text-sm italic">"Hãy để lòng kiên định dẫn lối bạn qua 60 ngày thử thách"</p>
@@ -248,11 +270,11 @@
 
                     <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-md border-b flex overflow-x-auto no-scrollbar whitespace-nowrap px-4 justify-center">
                         {[
-                            { id: 'leaderboard', icon: Trophy, label: 'Bảng Vàng' },
-                            { id: 'personal', icon: Flame, label: 'Tu Tập' },
-                            { id: 'atomic', icon: Zap, label: 'Thói Quen' },
-                            { id: 'challenges', icon: Target, label: 'Thử Thách' },
-                            { id: 'learning', icon: BookOpen, label: 'Giáo Pháp' },
+                            { id: 'leaderboard', icon: 'Trophy', label: 'Bảng Vàng' },
+                            { id: 'personal', icon: 'Flame', label: 'Tu Tập' },
+                            { id: 'atomic', icon: 'Zap', label: 'Thói Quen' },
+                            { id: 'challenges', icon: 'Target', label: 'Thử Thách' },
+                            { id: 'learning', icon: 'BookOpen', label: 'Giáo Pháp' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -274,7 +296,7 @@
                                             <h2 className="text-3xl font-black flex items-center gap-3 font-serif uppercase tracking-tight">Bảng Vàng Công Đức</h2>
                                             <p className="text-amber-100 text-sm mt-1">Ghi nhận sự tinh tấn của các hành giả</p>
                                         </div>
-                                        <Star className="animate-pulse hidden md:block" size={40} />
+                                        <Icon name="Star" className="animate-pulse hidden md:block" size={40} />
                                     </div>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left">
@@ -292,14 +314,13 @@
                                                 {leaderBoard.map((item, i) => (
                                                     <tr key={item.idx} className={`hover:bg-amber-50/50 transition-colors ${i < 3 ? 'bg-amber-50/20' : ''}`}>
                                                         <td className="px-8 py-6">
-                                                            {i === 0 ? <Medal className="text-amber-500" size={28} /> : 
-                                                             i === 1 ? <Medal className="text-stone-400" size={28} /> :
-                                                             i === 2 ? <Medal className="text-amber-700" size={28} /> : 
+                                                            {i === 0 ? <Icon name="Medal" className="text-amber-500" size={28} /> : 
+                                                             i === 1 ? <Icon name="Medal" className="text-stone-400" size={28} /> :
+                                                             i === 2 ? <Icon name="Medal" className="text-amber-700" size={28} /> : 
                                                              <span className="font-bold text-stone-300 ml-2 text-lg">{i + 1}</span>}
                                                         </td>
                                                         <td className="px-8 py-6">
                                                             <div className="font-bold text-stone-800 text-lg">{item.name}</div>
-                                                            {i === 0 && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">Thủ khoa tinh tấn</span>}
                                                         </td>
                                                         <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalDaily}</td>
                                                         <td className="px-8 py-6 text-center text-stone-500 font-medium">{item.totalAtomic}</td>
@@ -320,12 +341,12 @@
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10">
                                     <div className="lg:col-span-2">
                                         <div className="flex items-center justify-between mb-6 bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
-                                            <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200"><ChevronLeft/></button>
+                                            <button onClick={() => setViewDay(Math.max(1, viewDay - 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200"><Icon name="ChevronLeft"/></button>
                                             <div className="text-center">
                                                 <span className="block text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-1">Tiến trình hiện tại</span>
                                                 <span className="font-black text-2xl font-serif">Ngày {viewDay} / 60</span>
                                             </div>
-                                            <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200" disabled={viewDay >= todayNum}><ChevronRight/></button>
+                                            <button onClick={() => setViewDay(Math.min(todayNum, viewDay + 1))} className="p-3 hover:bg-stone-50 rounded-full transition-all border border-transparent hover:border-stone-200" disabled={viewDay >= todayNum}><Icon name="ChevronRight"/></button>
                                         </div>
                                         <div className="grid grid-cols-6 sm:grid-cols-10 gap-3 p-6 bg-white rounded-3xl shadow-sm border border-stone-100">
                                             {[...Array(TOTAL_DAYS)].map((_, i) => {
@@ -352,7 +373,7 @@
                                     </div>
                                     <div className="bg-stone-900 text-stone-100 p-8 rounded-3xl shadow-2xl h-fit border-t-8 border-amber-500">
                                         <h3 className="text-2xl font-black mb-8 text-amber-400 flex items-center gap-3 font-serif">
-                                            <Icon name={viewMode === 'personal' ? Flame : Zap} size={28}/>
+                                            <Icon name={viewMode === 'personal' ? 'Flame' : 'Zap'} size={28}/>
                                             {viewMode === 'personal' ? 'KHÓA LỄ NGÀY' : 'THÓI QUEN NHỎ'}
                                         </h3>
                                         <div className="space-y-4">
@@ -381,9 +402,9 @@
                                 <MemberSelector members={MEMBERS} selected={selectedMember} onSelect={setSelectedMember} />
                                 <div className="mt-10 bg-white p-10 rounded-3xl shadow-2xl border-2 border-stone-50 text-center">
                                     <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Target className="text-red-800" size={40} />
+                                        <Icon name="Target" className="text-red-800" size={40} />
                                     </div>
-                                    <h3 className="text-3xl font-black font-serif mb-2">THỬ THÁCH VÔ THƯỜNG</h3>
+                                    <h3 className="text-3xl font-black font-serif mb-2 text-stone-800 uppercase">THỬ THÁCH VÔ THƯỜNG</h3>
                                     <p className="text-stone-400 italic mb-10">"Sự kiên trì là nền tảng của mọi thành tựu tâm linh"</p>
                                     <div className="space-y-4 text-left">
                                         {CHALLENGES.map(ch => (
@@ -396,7 +417,7 @@
                                                     : 'bg-stone-50 border-stone-100 text-stone-500 hover:border-stone-200'
                                                 }`}
                                             >
-                                                {data[selectedMember]?.longTerm?.[ch.id] ? <CheckCircle2 className="text-amber-500" size={24} /> : <Circle className="opacity-20" size={24} />}
+                                                {data[selectedMember]?.longTerm?.[ch.id] ? <Icon name="CheckCircle2" className="text-amber-500" size={24} /> : <Icon name="Circle" className="opacity-20" size={24} />}
                                                 <span className="font-bold text-xl">{ch.label}</span>
                                             </button>
                                         ))}
@@ -416,12 +437,12 @@
                                                 className="bg-white p-10 rounded-3xl shadow-sm border-2 border-transparent hover:border-red-800 hover:shadow-2xl transition-all text-left group flex flex-col h-full"
                                             >
                                                 <div className="bg-red-50 text-red-800 w-16 h-16 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-red-800 group-hover:text-white transition-all">
-                                                    <BookOpen size={32} />
+                                                    <Icon name="BookOpen" size={32} />
                                                 </div>
                                                 <h3 className="text-2xl font-black mb-4 font-serif">{lesson.title}</h3>
                                                 <p className="text-stone-400 text-sm flex-grow italic leading-relaxed">Khám phá các khía cạnh thâm sâu của {lesson.title.toLowerCase()} và ứng dụng vào hành trình tu tập.</p>
                                                 <div className="mt-10 flex items-center text-red-800 font-bold text-xs uppercase tracking-[0.2em] gap-2">
-                                                    CHI TIẾT GIÁO PHÁP <ChevronRight size={14} />
+                                                    CHI TIẾT GIÁO PHÁP <Icon name="ChevronRight" size={14} />
                                                 </div>
                                             </button>
                                         ))}
@@ -429,10 +450,10 @@
                                 ) : (
                                     <div className="bg-white p-8 md:p-16 rounded-3xl shadow-2xl border border-stone-100 animate-in">
                                         <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-stone-400 hover:text-red-800 mb-10 font-bold transition-colors uppercase tracking-widest text-xs">
-                                            <ArrowLeft size={16} /> TRỞ LẠI THƯ VIỆN
+                                            <Icon name="ArrowLeft" size={16} /> TRỞ LẠI THƯ VIỆN
                                         </button>
-                                        <h2 className="text-5xl font-black mb-10 border-b-8 border-amber-500 pb-6 inline-block font-serif text-stone-800">{activeLesson.title}</h2>
-                                        <div className="text-xl leading-relaxed text-stone-600 whitespace-pre-wrap font-light first-letter:text-5xl first-letter:font-bold first-letter:text-red-800 first-letter:mr-3 first-letter:float-left">
+                                        <h2 className="text-5xl font-black mb-10 border-b-8 border-amber-500 pb-6 inline-block font-serif text-stone-800 uppercase">{activeLesson.title}</h2>
+                                        <div className="text-xl leading-relaxed text-stone-600 whitespace-pre-wrap font-light">
                                             {activeLesson.content}
                                         </div>
                                         <div className="mt-16 p-8 bg-stone-50 rounded-2xl border-l-8 border-red-800 italic text-stone-500 text-lg shadow-inner">
@@ -475,7 +496,7 @@
                 }`}
             >
                 <div className="mt-1 transition-transform group-active:scale-90">
-                    {isChecked ? <CheckCircle2 className="text-amber-500" size={22} /> : <Circle size={22} className="opacity-20" />}
+                    {isChecked ? <Icon name="CheckCircle2" className="text-amber-500" size={22} /> : <Icon name="Circle" className="opacity-20" size={22} />}
                 </div>
                 <span className="text-base font-bold leading-tight">{label}</span>
             </button>
