@@ -37,22 +37,20 @@ import {
   Star
 } from 'lucide-react';
 
-        // --- CẤU HÌNH FIREBASE ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
-            authDomain: "day-challenge-39df2.firebaseapp.com",
-            projectId: "day-challenge-39df2",
-            storageBucket: "day-challenge-39df2.firebasestorage.app",
-            messagingSenderId: "1083656610996",
-            appId: "1:1083656610996:web:67780223432a21866323e1"
-        };
+// --- CẤU HÌNH FIREBASE ---
+const firebaseConfig = {
+    apiKey: "AIzaSyC9NLtRzq6_pnt3-viN6a31WbLu_sMlGEI",
+    authDomain: "day-challenge-39df2.firebaseapp.com",
+    projectId: "day-challenge-39df2",
+    storageBucket: "day-challenge-39df2.firebasestorage.app",
+    messagingSenderId: "1083656610996",
+    appId: "1:1083656610996:web:67780223432a21866323e1"
+};
 
-        const firebaseApp = initializeApp(firebaseConfig);
-        const auth = getAuth(firebaseApp);
-        const db = getFirestore(firebaseApp);
-        const appId = "sixty-day-challenge-v1";
-
-        const { useState, useEffect } = React;
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const appId = "sixty-day-challenge-v1";
 
 const App = () => {
   const TOTAL_DAYS = 60;
@@ -133,6 +131,8 @@ const App = () => {
       const newData = {};
       snapshot.forEach((doc) => { newData[doc.id] = doc.data(); });
       setData(newData);
+    }, (error) => {
+      console.error("Firestore Error:", error);
     });
   }, [user]);
 
